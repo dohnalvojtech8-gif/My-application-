@@ -8,12 +8,31 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: VAPID_PUBLIC_KEY
+        sync: false
       - key: APP_ORIGIN
         sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: systematic-money-db
           property: connectionString
+  - type: cron
+    name: systematic-money-reminders
+    runtime: node
+    schedule: "*/15 * * * *"
+    buildCommand: npm ci && npx prisma generate
+    startCommand: npm run worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: systematic-money-db
+          property: connectionString
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
 databases:
   - name: systematic-money-db
     ipAllowList: []

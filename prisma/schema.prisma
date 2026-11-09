@@ -12,7 +12,12 @@ model User {
  role String @default("USER")
  blocked Boolean @default(false)
  opening BigInt @default(0)
+ preferences Json @default("{}")
+ events Event[]
  sessions Session[]
+ series Series[]
+ notifications Notification[]
+ subscriptions Subscription[]
  items Item[]
  entries Entry[]
 }
@@ -38,6 +43,11 @@ model Item {
  kind String
  color String @default("#14b8a6")
  hidden Boolean @default(false)
+ appearance Json @default("{}")
+ favorite Boolean @default(false)
+ important Boolean @default(false)
+ position Int @default(0)
+ defaultAmount BigInt @default(0)
  entries Entry[]
  @@unique([id,userId])
 }
@@ -51,7 +61,52 @@ model Entry {
  date String
  status String
  comment String @default("")
+ itemSnapshot Json?
+ seriesId String?
+ occurrence Int?
  key String
  @@unique([userId,key])
  @@index([userId,date])
+}
+
+model Series {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ itemId String
+ amount BigInt
+ start String
+ end String?
+ count Int?
+ frequency String
+ interval Int @default(1)
+ paused Boolean @default(false)
+ comment String @default("")
+ @@index([userId])
+}
+model Notification {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ entryId String
+ date String
+ title String
+ read Boolean @default(false)
+ @@unique([userId,entryId,date])
+}
+model Subscription {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ endpoint String @unique
+ keys Json
+}
+
+model Event {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ action String
+ createdAt DateTime @default(now())
+ @@index([userId,createdAt])
 }
