@@ -1,3 +1,4 @@
+import { allowedOrigins } from "./origin.js";
 import { installRestore } from "./restore.js";
 import { installUploads } from "./uploads.js";
 import { installExtended } from "./extended.js";
@@ -28,22 +29,33 @@ app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   if (
     !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
-    req.headers.origin !== (process.env.APP_ORIGIN || "http://localhost:3000")
+    !allowedOrigins().has(req.headers.origin || "")
   )
-    return res.status(403).json({ error: "Neplatný původ požadavku" });
+    return res
+      .status(403)
+      .json({
+        error:
+          "Adresa aplikace není povolená. Provozovatel musí zkontrolovat APP_ORIGIN na serveru.",
+      });
   next();
 });
 const credentials = z.object({
   username: z
     .string()
-    .min(3)
-    .max(64)
-    .regex(/^[\p{L}\p{N}_-]+$/u),
-  password: z.string().min(12).max(128),
+    .min(3, "Uživatelské jméno musí mít alespoň 3 znaky.")
+    .max(64, "Uživatelské jméno smí mít nejvýše 64 znaků.")
+    .regex(
+      /^[\p{L}\p{N}_-]+$/u,
+      "Jméno může obsahovat písmena, číslice, pomlčku a podtržítko; nikoli mezery nebo e-mail.",
+    ),
+  password: z
+    .string()
+    .min(12, "Heslo musí mít alespoň 12 znaků.")
+    .max(128, "Heslo smí mít nejvýše 128 znaků."),
   invite: z.string().optional(),
 });
 app.get("/api/health", async (_q, r) => {
-  await db.$queryRaw`SELECT 1`;
+  await db.bootstrap.findUnique({ where: { id: 1 } });
   r.json({ ok: true });
 });
 app.get("/api/setup", async (_q, r) =>
@@ -352,7 +364,31 @@ app.use(
     r: express.Response,
     _n: express.NextFunction,
   ) => {
-    console.error(err instanceof Error ? err.name : "Error");
+    const code =
+      typeof err === "object" && err && "code" in err ? String(err.code) : "";
+    console.error({ error: err instanceof Error ? err.name : "Error", code });
+    if (err instanceof z.ZodError)
+      return r
+        .status(400)
+        .json({ error: err.issues.map((i) => i.message).join(" ") });
+    if (code === "P2002")
+      return r
+        .status(409)
+        .json({
+          error:
+            "Účet již existuje nebo je registrace vlastníka uzavřena. Přihlaste se; další účet vyžaduje pozvánku.",
+        });
+    if (
+      code.startsWith("P1") ||
+      ["P2021", "P2022"].includes(code) ||
+      (err instanceof Error && err.name === "PrismaClientInitializationError")
+    )
+      return r
+        .status(503)
+        .json({
+          error:
+            "Databáze není připravená. Provozovatel musí ověřit DATABASE_URL a spustit databázové migrace. Nejde o chybu hesla.",
+        });
     r.status(400).json({
       error: "Požadavek nelze provést. Zkontrolujte údaje.",
     });

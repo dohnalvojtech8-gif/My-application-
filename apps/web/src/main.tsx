@@ -18,7 +18,14 @@ async function api(
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const d = await r.json();
+  const d = await r
+    .json()
+    .catch(() => ({
+      error:
+        r.status === 429
+          ? "Příliš mnoho pokusů. Vyčkejte několik minut."
+          : "Server není dostupný. Zkuste to prosím znovu.",
+    }));
   if (!r.ok) throw Error(d.error);
   return d;
 }
@@ -50,7 +57,10 @@ function App() {
     [menu, setMenu] = useState(false),
     [pinned, setPinned] = useState(false),
     [register, setRegister] = useState(false),
-    [open, setOpen] = useState(false),
+    [open, setOpen] = useState<boolean | null>(null),
+    [setupError, setSetupError] = useState(""),
+    [authBusy, setAuthBusy] = useState(false),
+    [authNotice, setAuthNotice] = useState(""),
     [form, setForm] = useState(
       new URLSearchParams(location.search).get("quick") === "EXPENSE"
         ? "EXPENSE"
@@ -99,9 +109,22 @@ function App() {
     api("/data")
       .then(setData)
       .catch(() => setData(null));
+  async function checkSetup() {
+    setSetupError("");
+    setOpen(null);
+    try {
+      const d = await api("/setup");
+      if (typeof d.open !== "boolean")
+        throw Error("Server vrátil neplatný stav registrace.");
+      setOpen(d.open);
+      setRegister(d.open);
+    } catch (e) {
+      setSetupError((e as Error).message);
+    }
+  }
   useEffect(() => {
     refresh();
-    api("/setup").then((d) => setOpen(d.open));
+    void checkSetup();
   }, []);
   async function act(fn: () => Promise<unknown>) {
     try {
@@ -129,48 +152,114 @@ function App() {
       <main className="login">
         <h1>◈ SYSTEMATIC MONEY</h1>
         <p>Vaše peníze. Váš přehled.</p>
-        <form
-          onSubmit={(e) =>
-            submit(e, async (v) => {
-              await api("/auth/" + (register ? "register" : "login"), v);
-              if (register) {
-                setRegister(false);
-                setOpen(false);
-              } else await refresh();
-            })
-          }
-        >
-          <h2>{register ? "Vytvořit účet" : "Vítejte zpět"}</h2>
-          <label>
-            Uživatelské jméno
-            <input name="username" required autoComplete="username" />
-          </label>
-          <label>
-            Heslo (alespoň 12 znaků)
-            <input
-              name="password"
-              type="password"
-              minLength={12}
-              required
-              autoComplete={register ? "new-password" : "current-password"}
-            />
-          </label>
-          {register && !open && (
+        {open === null ? (
+          <section aria-live="polite">
+            {setupError ? (
+              <>
+                <h2>Aplikace není připravená</h2>
+                <p role="alert">{setupError}</p>
+                <button onClick={() => void checkSetup()}>Zkusit znovu</button>
+              </>
+            ) : (
+              <p>Ověřuji možnost vytvoření účtu…</p>
+            )}
+          </section>
+        ) : (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (authBusy) return;
+              const v = Object.fromEntries(new FormData(e.currentTarget));
+              setAuthBusy(true);
+              setError("");
+              setAuthNotice("");
+              try {
+                if (register) {
+                  await api("/auth/register", v);
+                  setRegister(false);
+                  setOpen(false);
+                  setAuthNotice("Účet byl vytvořen. Přihlašuji vás…");
+                }
+                await api("/auth/login", v);
+                await refresh();
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setAuthBusy(false);
+              }
+            }}
+          >
+            <h2>
+              {open
+                ? "Vytvoření hlavního účtu"
+                : register
+                  ? "Registrace přes pozvánku"
+                  : "Přihlášení"}
+            </h2>
+            {open && (
+              <p>
+                Aplikace zatím nemá vlastníka. Zvolte si nové jméno a heslo;
+                tento účet získá roli OWNER.
+              </p>
+            )}
+            {authNotice && <p role="status">{authNotice}</p>}
             <label>
-              Pozvánka
-              <input name="invite" required />
+              Uživatelské jméno
+              <input
+                name="username"
+                minLength={3}
+                maxLength={64}
+                required
+                autoComplete="username"
+              />
+              <small>
+                Alespoň 3 znaky: písmena, číslice, pomlčka nebo podtržítko.
+              </small>
             </label>
-          )}
-          <button>{register ? "Registrovat" : "Přihlásit se"}</button>
-          <button type="button" onClick={() => setRegister(!register)}>
-            {register
-              ? "Zpět k přihlášení"
-              : open
-                ? "Vytvořit hlavní účet"
-                : "Mám pozvánku"}
-          </button>
-          <p role="alert">{error}</p>
-        </form>
+            <label>
+              Heslo (alespoň 12 znaků)
+              <input
+                name="password"
+                type="password"
+                minLength={12}
+                required
+                autoComplete={register ? "new-password" : "current-password"}
+              />
+            </label>
+            {register && !open && (
+              <label>
+                Pozvánka
+                <input name="invite" required />
+              </label>
+            )}
+            <button disabled={authBusy}>
+              {authBusy
+                ? "Zpracovávám…"
+                : open
+                  ? "Vytvořit hlavní účet"
+                  : register
+                    ? "Registrovat"
+                    : "Přihlásit se"}
+            </button>
+            {!open && (
+              <button
+                type="button"
+                disabled={authBusy}
+                onClick={() => {
+                  setRegister(!register);
+                  setError("");
+                }}
+              >
+                {register
+                  ? "Zpět k přihlášení"
+                  : open
+                    ? "Vytvořit hlavní účet"
+                    : "Mám pozvánku"}
+              </button>
+            )}
+            <p role="alert">{error}</p>
+          </form>
+        )}
       </main>
     );
   const entries = data.entries.filter(

@@ -57,3 +57,9 @@ Ověřeno lokálně: TypeScript a produkční build, 6 jednotkových testů, 1 i
 Pro úplnou zálohu včetně sessions, pozvánek a konfigurace použijte PostgreSQL `pg_dump` do šifrovaného úložiště a ověřte `pg_restore` do samostatné databáze. Uživatelská JSON obnova obnovuje položky/transakce a počáteční zůstatek, nikoli série, preferences, sessions či push odběry. Databázový administrátor technicky disponuje přístupem k databázi; aplikační OWNER takové API nemá.
 
 [Licenční informace k ikonám](LICENSES.md). Nikdy necommitujte `.env`, privátní VAPID klíč nebo mobilní keystore.
+
+## Řešení potíží při prvním spuštění
+
+Aplikace nejprve ověří databázi. V prázdné databázi automaticky nabídne **Vytvoření hlavního účtu** a po úspěšné registraci uživatele přihlásí. Vlastní heslo musí mít alespoň 12 znaků; uživatelské jméno nejméně 3 znaky, bez mezer a bez e-mailové adresy.
+
+Pokud se zobrazí „Databáze není připravená“, nejde o heslo. Ve službě Render ověřte `DATABASE_URL` (skutečné PostgreSQL připojení) a dokončení migrací. `npm start` nyní provádí migrace automaticky přes `prestart`. `/api/health` kontroluje také dostupnost registrační tabulky. Aplikace přijímá svůj Render origin z důvěryhodné proměnné `RENDER_EXTERNAL_URL`; vlastní doménu nastavte v `APP_ORIGIN`. Koncové lomítko nevadí.

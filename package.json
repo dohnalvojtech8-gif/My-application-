@@ -8,7 +8,8 @@
     "start": "tsx apps/api/server.ts",
     "test": "vitest run",
     "migrate": "prisma migrate deploy",
-    "worker": "tsx apps/api/worker.ts"
+    "worker": "tsx apps/api/worker.ts",
+    "prestart": "npm run migrate"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",

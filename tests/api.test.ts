@@ -35,7 +35,7 @@ suite(
         .set("Origin", origin)
         .send({ ...creds, username: "racer" }),
     ]);
-    expect(registrations.map((r) => r.status).sort()).toEqual([201, 400]);
+    expect(registrations.map((r) => r.status).sort()).toEqual([201, 409]);
     const winner = await db.user.findFirst();
     expect(winner.role).toBe("OWNER");
     expect(
@@ -45,7 +45,7 @@ suite(
           .set("Origin", origin)
           .send({ ...creds, username: "third" })
       ).status,
-    ).toBe(400);
+    ).toBe(409);
     const owner = request.agent(app),
       other = request.agent(app);
     await owner
