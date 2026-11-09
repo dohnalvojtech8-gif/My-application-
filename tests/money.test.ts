@@ -1,0 +1,2 @@
+import{describe,it,expect}from'vitest';import{cents,balance}from'../apps/api/money';
+describe('Přesné peníze',()=>{it('převádí desetinné částky bez float chyb',()=>{expect(cents('0,29')).toBe(29n);expect(cents('100.1')).toBe(10010n)});it('odmítá neplatné částky',()=>{for(const v of ['-1','NaN','1.001','1e3'])expect(()=>cents(v)).toThrow()});it('plánované platby nemění zůstatek',()=>{expect(balance(100n,[{amount:50n,status:'PLANNED',item:{kind:'EXPENSE'}},{amount:29n,status:'DONE',item:{kind:'INCOME'}}])).toBe(129n)})});

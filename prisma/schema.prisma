@@ -1,0 +1,57 @@
+generator client {
+ provider = "prisma-client-js"
+}
+datasource db {
+ provider = "postgresql"
+ url = env("DATABASE_URL")
+}
+model User {
+ id String @id @default(uuid())
+ username String @unique
+ password String
+ role String @default("USER")
+ blocked Boolean @default(false)
+ opening BigInt @default(0)
+ sessions Session[]
+ items Item[]
+ entries Entry[]
+}
+model Bootstrap {
+ id Int @id
+}
+model Session {
+ token String @id
+ userId String
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ expires DateTime
+}
+model Invite {
+ token String @id
+ expires DateTime
+ used Boolean @default(false)
+}
+model Item {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ name String
+ kind String
+ color String @default("#14b8a6")
+ hidden Boolean @default(false)
+ entries Entry[]
+ @@unique([id,userId])
+}
+model Entry {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ itemId String
+ item Item @relation(fields: [itemId,userId], references: [id,userId])
+ amount BigInt
+ date String
+ status String
+ comment String @default("")
+ key String
+ @@unique([userId,key])
+ @@index([userId,date])
+}

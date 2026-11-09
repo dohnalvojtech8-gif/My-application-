@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: systematic-money
+    runtime: node
+    buildCommand: npm ci && npm run build
+    startCommand: npm run migrate && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: systematic-money-db
+          property: connectionString
+databases:
+  - name: systematic-money-db
+    ipAllowList: []
