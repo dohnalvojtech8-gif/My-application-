@@ -46,4 +46,4 @@ Tento soubor záměrně rozlišuje implementaci, ověření a zbývající čás
 - iOS: samostatné widgety Příjem a Výdaj pro otevření listu, jednotlivá přímá akce s požadavkem na místní odemčení a nový panel deseti plateb na domovské obrazovce.
 - Android: výběr jednoduchého tlačítka, jedné akce nebo panelu; přímé platby výhradně přes neexportovanou Activity s ověřením systémového zámku. Zámek widgetů závisí na verzi systému/výrobci.
 - Server a editor: pevně deset pozic, prohazování řádků, kontrola vlastnictví a typu, prázdné pozice při odstranění předvolby. Žádná platba nevzniká pouhou konfigurací.
-- Android debug build této aktualizace prošel. Nové iOS zdroje čekají na výsledek macOS CI; dřívější verze se sestavila úspěšně. Ověření na skutečném iPhone 13 a Android telefonu není provedeno.
+- Android debug build i iOS simulátorový build této aktualizace včetně všech widgetů prošly v GitHub Actions (Native apps, běh 42823446720). Webové CI rovněž prošlo (Validate, běh 42823446727). Ověření na skutečném iPhone 13 a Android telefonu není provedeno.

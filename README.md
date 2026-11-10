@@ -1,6 +1,6 @@
 # SYSTEMATIC MONEY
 
-Česká aplikace osobních financí s React/Vite/TypeScript, Tailwind, Recharts, Express a PostgreSQL/Prisma. Obsahuje web, PWA a zdrojové projekty Capacitor pro iOS/Android. Stav a limity jsou v [STATUS.md](STATUS.md); nativní sestavení není ověřené.
+Česká aplikace osobních financí s React/Vite/TypeScript, Tailwind, Recharts, Express a PostgreSQL/Prisma. Obsahuje web, PWA a zdrojové projekty Capacitor pro iOS/Android. Stav a limity jsou v [STATUS.md](STATUS.md); Android debug build a iOS simulátorový build prošly, testy na fyzických telefonech zbývají.
 
 ## Lokální spuštění
 
@@ -48,7 +48,7 @@ DATABASE_URL=postgresql://.../systematic_test npx playwright test
 
 Integrační test nejprve vyžaduje migrace v testovací DB. Playwright scénáře navazují na účty vytvořené integračním testem. CI připravuje vlastní PostgreSQL a spouští oba kroky.
 
-Ověřeno lokálně: TypeScript a produkční build, 6 jednotkových testů, 1 integrační scénář s řadou API kontrol, 2 Playwright scénáře pro mobil/desktop. Přesný rozsah v STATUS.md. Nejde o nezávislý bezpečnostní audit.
+Ověřeno lokálně i ve webovém CI: TypeScript a produkční build, 8 jednotkových testů a 2 rozsáhlé integrační scénáře (10 testů Vitest), 14 Playwright testů pro mobil/desktop. Přesný rozsah v STATUS.md. Nejde o nezávislý bezpečnostní audit.
 
 ## Mobil a provoz
 
@@ -73,3 +73,5 @@ Smazání položku vyřadí z nových plateb; historické a již naplánované t
 ## Systémové widgety
 
 V Nastavení → Widgety a rychlé akce lze připravit vlastní položky a částky pro příjmy i výdaje, s formulářem nebo přímým uložením. Připojení telefonu, volitelný zůstatek, ochrana proti duplicitám, sestavení iOS/Android a instalace jsou popsány v [MOBILE.md](MOBILE.md). PWA sama systémové widgety neposkytuje. Workflow **Native apps** sestavuje Android debug APK a kontroluje iOS simulátorový build; stav skutečného ověření je v [STATUS.md](STATUS.md).
+
+[Srovnání funkcí se Spendee a návrhy dalšího rozvoje](FEATURE_COMPARISON.md).
