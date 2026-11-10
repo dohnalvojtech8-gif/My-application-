@@ -978,7 +978,7 @@ suite(
         await tx.$executeRawUnsafe('CREATE SCHEMA "' + schema + '"');
         await tx.$executeRawUnsafe('SET LOCAL search_path TO "' + schema + '"');
         const folders = readdirSync("prisma/migrations")
-          .filter((n) => /^\d/.test(n))
+          .filter((n) => /^\d/.test(n) && n <= "20261110040000_wallets")
           .sort();
         async function apply(folder: string) {
           const sql = readFileSync(
@@ -1025,4 +1025,171 @@ suite(
     );
   },
   25000,
+);
+
+suite(
+  "hromadné pozvánky: stavy, jednorázová aktivace, expirace, zrušení a oprávnění",
+  async () => {
+    const password = "test-password-12345";
+    const ownerUser = await db.user.findFirst({ where: { role: "OWNER" } });
+    const admin = request.agent(app).set("X-Forwarded-For", "198.51.100.80");
+    const visitor = request.agent(app).set("X-Forwarded-For", "198.51.100.81");
+    await admin
+      .post("/api/auth/login")
+      .set("Origin", origin)
+      .send({ username: ownerUser.username, password })
+      .expect(200);
+    await visitor.get("/api/admin/invites").expect(401);
+    await admin
+      .post("/api/admin/invites")
+      .set("Origin", origin)
+      .send({ count: 51 })
+      .expect(400);
+    await admin
+      .post("/api/admin/invites")
+      .set("Origin", origin)
+      .send({ count: 0 })
+      .expect(400);
+    await admin
+      .post("/api/admin/invites")
+      .set("Origin", origin)
+      .send({ count: 1.5 })
+      .expect(400);
+    await admin
+      .post("/api/admin/invites")
+      .set("Origin", origin)
+      .send({ count: 3, hours: 999 })
+      .expect(400);
+    await admin.post("/api/admin/invites").send({ count: 3 }).expect(403);
+    const before = new Set(
+      (await admin.get("/api/admin/invites")).body.map((i: any) => i.id),
+    );
+    const batch = await admin
+      .post("/api/admin/invites")
+      .set("Origin", origin)
+      .send({ count: 5, hours: 72 })
+      .expect(200);
+    expect(batch.body.count).toBe(5);
+    const invitations = (await admin.get("/api/admin/invites")).body.filter(
+      (i: any) => !before.has(i.id),
+    );
+    expect(invitations).toHaveLength(5);
+    expect(new Set(invitations.map((i: any) => i.code)).size).toBe(5);
+    expect(
+      invitations.every(
+        (i: any) =>
+          i.status === "PENDING" && i.code.startsWith("SM-") && !i.username,
+      ),
+    ).toBe(true);
+    expect(Date.parse(invitations[0].expires) - Date.now()).toBeGreaterThan(
+      71 * 3600000,
+    );
+    const [used, revoked, expired, rollback, race] = invitations;
+    await visitor
+      .post("/api/auth/register")
+      .set("Origin", origin)
+      .send({
+        username: "invited_new",
+        password,
+        invite: ` ${used.code.toLowerCase()} `,
+      })
+      .expect(201);
+    await visitor
+      .post("/api/auth/login")
+      .set("Origin", origin)
+      .send({ username: "invited_new", password })
+      .expect(200);
+    const clean = (await visitor.get("/api/data")).body;
+    expect(clean.user.role).toBe("USER");
+    expect(clean.entries).toHaveLength(0);
+    expect(clean.items).toHaveLength(0);
+    expect(clean.balance).toBe("0");
+    await visitor.get("/api/admin/invites").expect(403);
+    await visitor
+      .post("/api/admin/invites")
+      .set("Origin", origin)
+      .send({ count: 1 })
+      .expect(403);
+    await visitor
+      .delete("/api/admin/invites/" + revoked.id)
+      .set("Origin", origin)
+      .expect(403);
+    let list = (await admin.get("/api/admin/invites")).body;
+    expect(list.find((i: any) => i.id === used.id)).toMatchObject({
+      status: "ACTIVATED",
+      username: "invited_new",
+      code: null,
+    });
+    expect(
+      (await db.invite.findUnique({ where: { token: used.id } })).code,
+    ).toBeNull();
+    await visitor
+      .post("/api/auth/register")
+      .set("Origin", origin)
+      .send({ username: "invite_reuse", password, invite: used.code })
+      .expect(400);
+    await admin
+      .delete("/api/admin/invites/" + used.id)
+      .set("Origin", origin)
+      .expect(409);
+    await admin
+      .delete("/api/admin/invites/" + revoked.id)
+      .set("Origin", origin)
+      .expect(200);
+    await visitor
+      .post("/api/auth/register")
+      .set("Origin", origin)
+      .send({ username: "invite_revoked", password, invite: revoked.code })
+      .expect(400);
+    await db.invite.update({
+      where: { token: expired.id },
+      data: { expires: new Date(Date.now() - 1000) },
+    });
+    await visitor
+      .post("/api/auth/register")
+      .set("Origin", origin)
+      .send({ username: "invite_expired", password, invite: expired.code })
+      .expect(400);
+    // A rejected duplicate username rolls back consumption of the invitation.
+    await visitor
+      .post("/api/auth/register")
+      .set("Origin", origin)
+      .send({ username: "invited_new", password, invite: rollback.code })
+      .expect(409);
+    expect(
+      (await db.invite.findUnique({ where: { token: rollback.id } })).used,
+    ).toBe(false);
+    await visitor
+      .post("/api/auth/register")
+      .set("Origin", origin)
+      .send({
+        username: "invited_after_retry",
+        password,
+        invite: rollback.code,
+      })
+      .expect(201);
+    const results = await Promise.all(
+      ["invite_race_a", "invite_race_b"].map((username) =>
+        request(app)
+          .post("/api/auth/register")
+          .set("X-Forwarded-For", "198.51.100.82")
+          .set("Origin", origin)
+          .send({ username, password, invite: race.code }),
+      ),
+    );
+    expect(results.map((r) => r.status).sort()).toEqual([201, 400]);
+    list = (await admin.get("/api/admin/invites")).body;
+    expect(list.find((i: any) => i.id === revoked.id)).toMatchObject({
+      status: "REVOKED",
+      code: null,
+    });
+    expect(list.find((i: any) => i.id === expired.id)).toMatchObject({
+      status: "EXPIRED",
+      code: null,
+    });
+    const activated = list.find((i: any) => i.id === race.id);
+    expect(activated.status).toBe("ACTIVATED");
+    expect(["invite_race_a", "invite_race_b"]).toContain(activated.username);
+  },
+  20000,
 );

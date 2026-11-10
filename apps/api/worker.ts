@@ -11,6 +11,11 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY)
     process.env.VAPID_PRIVATE_KEY,
   );
 try {
+  // Codes are visible only while usable; remove expired values from storage too.
+  await db.invite.updateMany({
+    where: { code: { not: null }, expires: { lte: new Date() } },
+    data: { code: null },
+  });
   if (configured()) {
     for (const c of await db.bankConnection.findMany({
       where: {

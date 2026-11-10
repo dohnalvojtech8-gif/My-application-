@@ -49,7 +49,7 @@ DATABASE_URL=postgresql://.../systematic_test npx playwright test
 
 Integrační test nejprve vyžaduje migrace v testovací DB. Playwright scénáře navazují na účty vytvořené integračním testem. CI připravuje vlastní PostgreSQL a spouští oba kroky.
 
-Lokálně ověřeno: TypeScript a produkční build, 14 jednotkových testů a 5 integračních scénářů na PostgreSQL (19 testů Vitest), 22 Playwright testů pro mobil/desktop. CI spouští stejné kontroly při každém pushi. Přesný rozsah v STATUS.md. Nejde o nezávislý bezpečnostní audit.
+Lokálně ověřeno: TypeScript a produkční build, 14 jednotkových testů a 6 integračních scénářů na PostgreSQL (20 testů Vitest), 24 Playwright testů pro mobil/desktop. Aktuální výsledky jsou v GitHub Actions a STATUS.md. CI spouští stejné kontroly při každém pushi. Nejde o nezávislý bezpečnostní audit.
 
 ## Mobil a provoz
 
@@ -64,6 +64,16 @@ Pro úplnou zálohu včetně sessions, pozvánek a konfigurace použijte Postgre
 Aplikace nejprve ověří databázi. V prázdné databázi automaticky nabídne **Vytvoření hlavního účtu** a po úspěšné registraci uživatele přihlásí. Vlastní heslo musí mít alespoň 12 znaků; uživatelské jméno nejméně 3 znaky, bez mezer a bez e-mailové adresy.
 
 Pokud se zobrazí „Databáze není připravená“, nejde o heslo. Ve službě Render ověřte `DATABASE_URL` (skutečné PostgreSQL připojení) a dokončení migrací. `npm start` nyní provádí migrace automaticky přes `prestart`. `/api/health` kontroluje také dostupnost registrační tabulky. Aplikace přijímá svůj Render origin z důvěryhodné proměnné `RENDER_EXTERNAL_URL`; vlastní doménu nastavte v `APP_ORIGIN`. Koncové lomítko nevadí.
+
+## Pozvání nových uživatelů
+
+Jako OWNER otevřete **Profil → Pozvánky pro nové uživatele** nebo **Nastavení → Uživatelé a pozvánky**. Zvolte počet 1–50 a platnost 24 hodin, 3 dny nebo 7 dní. Po vygenerování se u každé pozvánky zobrazí její kód a stav **Čeká na registraci**. Kód zůstane dostupný i po obnovení stránky, dokud je platný a nepoužitý.
+
+Každému člověku pošlete odkaz `https://my-application-99m3.onrender.com/register` a jiný kód, případně použijte **Kopírovat pozvánku**. Tento odkaz rovnou zobrazí formulář **Uživatelské jméno, Heslo, Pozvánkový kód**. Běžná úvodní adresa dál nabízí přihlášení a tlačítko **Mám pozvánku**. Po registraci vznikne samostatný prázdný účet USER a uživatel se automaticky přihlásí.
+
+V přehledu vlastníka se kód po registraci nahradí uživatelským jménem, stavem **Aktivováno** a časem aktivace. Přehled se obnovuje po 15 sekundách nebo ručně. Čekající pozvánku lze zrušit; použitou, zrušenou ani prošlou nelze znovu uplatnit. „Čeká“ označuje nevyužitý kód, nikoli rozpracovaný formulář návštěvníka. Starší pozvánky vytvořené před touto aktualizací zůstávají platné, ale jejich původní kód ani uživatele dřívější aktivace nelze zpětně rekonstruovat.
+
+Platné pozvánkové kódy jsou záměrně znovu zobrazitelné pouze vlastníku. Databáze uchovává jejich hodnotu do použití či zrušení; po expiraci je API skrývá a worker uloženou hodnotu odstraní. Nejsou součástí URL ani uživatelských finančních záloh. Aktivace kódu a vytvoření uživatele probíhají v jedné databázové transakci.
 
 ## Vizuální editor položek
 

@@ -1,3 +1,4 @@
+import { installInvites, normalizeInvite } from "./invites.js";
 import {
   installWallets,
   walletFor,
@@ -69,7 +70,7 @@ const credentials = z.object({
     .string()
     .min(12, "Heslo musí mít alespoň 12 znaků.")
     .max(128, "Heslo smí mít nejvýše 128 znaků."),
-  invite: z.string().optional(),
+  invite: z.string().max(200).transform(normalizeInvite).optional(),
 });
 app.get("/api/health", async (_q, r) => {
   await db.bootstrap.findUnique({ where: { id: 1 } });
@@ -89,16 +90,21 @@ app.post("/api/auth/register", async (q, r) => {
         where: {
           token: hash(c.invite),
           used: false,
+          revokedAt: null,
           expires: { gt: new Date() },
         },
-        data: { used: true },
+        data: { used: true, usedAt: new Date(), code: null },
       });
-      if (changed.count !== 1) throw Error("Neplatná pozvánka");
+      if (changed.count !== 1)
+        throw new FinanceError(
+          400,
+          "Pozvánkový kód je neplatný, použitý, zrušený nebo mu skončila platnost.",
+        );
     } else {
       await tx.bootstrap.create({ data: { id: 1 } });
       role = "OWNER";
     }
-    await tx.user.create({
+    const user = await tx.user.create({
       data: {
         username: c.username,
         password,
@@ -106,6 +112,11 @@ app.post("/api/auth/register", async (q, r) => {
         wallets: { create: { name: "Osobní účet", isDefault: true } },
       },
     });
+    if (c.invite)
+      await tx.invite.update({
+        where: { token: hash(c.invite) },
+        data: { usedById: user.id },
+      });
   });
   r.status(201).json({ ok: true });
 });
@@ -404,13 +415,7 @@ app.get("/api/admin/users", async (_q, r) =>
     }),
   ),
 );
-app.post("/api/admin/invites", async (_q, r) => {
-  const t = token();
-  await db.invite.create({
-    data: { token: hash(t), expires: new Date(Date.now() + 86400000) },
-  });
-  r.json({ invite: t });
-});
+installInvites(app, db);
 app.post("/api/admin/users/:id/block", async (q, r) =>
   r.json(
     await db.user.updateMany({

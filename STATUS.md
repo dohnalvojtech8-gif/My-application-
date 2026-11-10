@@ -5,8 +5,8 @@
 - Produkční build Vite, TypeScript, generování Prisma klienta a migrace na PostgreSQL 16.
 - 14 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování, procenta, přestupný rok, porovnání stejně dlouhých období, účtování převodů a projekce opakování.
 - Integrační scénář: souběžná první registrace, jediný OWNER, uzavření registrace, jednorázová pozvánka, přihlášení, zákaz běžné administrace pro USER, kontrola Origin, izolace OWNER/USER, vytvoření/úprava/smazání/potvrzení, idempotence, opakování bez duplicit, zachování přeskočených výskytů, zákaz cizího uploadu a neplatného obrazového formátu, obnova s novými ID, zákaz obnovy do neprázdného účtu, blokování sessions.
-- Celkem 5 integračních scénářů včetně bank, widgetů, více účtů a migrace původní evidence. Nové kontroly ověřují cizí účty, souběžné převody bez duplicit, archivaci, cílový účet widgetu, obnovu včetně sérií a neměnný celkový zůstatek při převodu.
-- 22 Chromium/Playwright testů: přihlášení, dashboard, nastavení, editor, banky, widgety a analytika při 1440×900 a 390×844; procenta, filtry, převody, společný výběr účtu a kontrola vodorovného přetečení.
+- Celkem 6 integračních scénářů včetně bank, widgetů, více účtů, migrace původní evidence a hromadných pozvánek. Nové kontroly ověřují cizí účty, souběžné převody bez duplicit, archivaci, cílový účet widgetu, obnovu včetně sérií a neměnný celkový zůstatek při převodu.
+- 24 Chromium/Playwright testů: přihlášení, dashboard, nastavení, editor, banky, widgety, pozvánky a analytika při 1440×900 a 390×844; procenta, filtry, převody, společný výběr účtu, registrace přes kód, zobrazení aktivovaného jména a kontrola vodorovného přetečení.
 - Render YAML vyhovuje veřejnému schématu draft 2020-12.
 
 ## Implementováno, vyžaduje provozní ověření
@@ -72,3 +72,11 @@ Tento soubor záměrně rozlišuje implementaci, ověření a zbývající čás
 - Android release workflow připravuje podepsanou APK a AAB z vlastního upload key. Bez nastavení klíčů se distribuční build nespouští.
 - Webové nastavení výslovně vysvětluje, proč PWA widgety nezobrazuje a kde se po instalaci nativní aplikace přidávají.
 - Podepsané release workflow a upload nejsou ověřené s účtem vydavatele. Apple Developer/Play Console účet, fyzické testy a veřejné vydání zbývají. Přesný návod je v [DISTRIBUTION.md](DISTRIBUTION.md).
+
+## Hromadné pozvánky a registrace přes odkaz
+
+- Odkaz `/register` otevře přímo výběr nového jména, hesla a zadání pozvánkového kódu. Veřejná registrace bez pozvánky zůstává uzavřená po vytvoření vlastníka.
+- OWNER může v Profilu i Nastavení vytvořit 1–50 samostatných kódů naráz, zvolit platnost a kopírovat odkaz s kódem nebo všechny platné kódy. Každý založí nejvýše jeden čistý soukromý účet.
+- Přehled uchovává stav: čeká na registraci, aktivováno, platnost skončila, zrušeno. Po aktivaci se místo kódu zobrazuje uživatelské jméno; automatické obnovení každých 15 sekund. Starší záznamy bez dohledatelné identity jsou výslovně označené.
+- Integrační test ověřuje počet a jedinečnost kódů, přístup pouze pro OWNER, zrušení, expiraci, odstranění použitého kódu, souběžné uplatnění jedné pozvánky a zachování platnosti po neúspěšné registraci s obsazeným jménem. Celkem 20 Vitest testů prošlo lokálně.
+- Prohlížeč ověřuje hromadné vytvoření, zachování kódu po obnovení stránky, registraci v odděleném prohlížečovém kontextu a nahrazení kódu uživatelským jménem na mobilu i desktopu. Celkem 24 Playwright testů prošlo lokálně.

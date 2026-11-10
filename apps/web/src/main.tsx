@@ -75,7 +75,7 @@ function App() {
     [confirmDate, setConfirmDate] = useState(day()),
     [menu, setMenu] = useState(false),
     [pinned, setPinned] = useState(false),
-    [register, setRegister] = useState(false),
+    [register, setRegister] = useState(location.pathname === "/register"),
     [open, setOpen] = useState<boolean | null>(null),
     [setupError, setSetupError] = useState(""),
     [authBusy, setAuthBusy] = useState(false),
@@ -92,7 +92,6 @@ function App() {
     ),
     [month, setMonth] = useState(new Date()),
     [period, setPeriod] = useState("Měsíc"),
-    [invite, setInvite] = useState(""),
     [editingEntry, setEditingEntry] = useState<Entry | null>(null),
     [quickPreset, setQuickPreset] = useState<any>(null);
   useEffect(() => {
@@ -206,7 +205,7 @@ function App() {
       if (typeof d.open !== "boolean")
         throw Error("Server vrátil neplatný stav registrace.");
       setOpen(d.open);
-      setRegister(d.open);
+      setRegister(d.open || location.pathname === "/register");
     } catch (e) {
       setSetupError((e as Error).message);
     }
@@ -273,6 +272,8 @@ function App() {
                   setAuthNotice("Účet byl vytvořen. Přihlašuji vás…");
                 }
                 await api("/auth/login", v);
+                if (location.pathname === "/register")
+                  history.replaceState(null, "", "/");
                 await refresh();
               } catch (e) {
                 setError((e as Error).message);
@@ -292,6 +293,13 @@ function App() {
               <p>
                 Aplikace zatím nemá vlastníka. Zvolte si nové jméno a heslo;
                 tento účet získá roli OWNER.
+              </p>
+            )}
+            {register && !open && (
+              <p>
+                Zvolte si nové uživatelské jméno a heslo a vložte kód od
+                vlastníka. Vznikne váš vlastní prázdný účet se soukromými
+                financemi.
               </p>
             )}
             {authNotice && <p role="status">{authNotice}</p>}
@@ -320,8 +328,16 @@ function App() {
             </label>
             {register && !open && (
               <label>
-                Pozvánka
-                <input name="invite" required />
+                Pozvánkový kód
+                <input
+                  name="invite"
+                  required
+                  maxLength={200}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  placeholder="SM-…"
+                />
               </label>
             )}
             <button disabled={authBusy}>
@@ -339,6 +355,7 @@ function App() {
                 disabled={authBusy}
                 onClick={() => {
                   setRegister(!register);
+                  history.replaceState(null, "", register ? "/" : "/register");
                   setError("");
                 }}
               >
@@ -756,22 +773,6 @@ function App() {
               >
                 Odhlásit
               </button>
-              {data.user.role === "OWNER" && (
-                <>
-                  <h3>Správa přístupu</h3>
-                  <button
-                    onClick={() =>
-                      void act(async () => {
-                        const d = await api("/admin/invites", {});
-                        setInvite(d.invite);
-                      })
-                    }
-                  >
-                    Vytvořit pozvánku na 24 hodin
-                  </button>
-                  {invite && <p className="token">{invite}</p>}
-                </>
-              )}
             </article>
             {data.user.role === "OWNER" && <Admin />}
           </>

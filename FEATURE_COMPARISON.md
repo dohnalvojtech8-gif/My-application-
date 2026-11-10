@@ -28,7 +28,7 @@ Stav zpracování: 10. listopadu 2026. Spendee je popsáno podle oficiální dok
 | Funkce | Skutečný stav | Ověření / hranice |
 |---|---|---|
 | Web, PWA, iOS a Android | Společný backend, databáze a účet; nativní aplikace s Capacitor a vlastními widgety. | Web build, Android APK i iOS simulátorový build prošly. V obchodech nezveřejněno. |
-| Uživatelé a soukromí | OWNER, pozvánky, blokace, sessions; uživatelská data oddělena na serveru. | Integrační kontroly izolace; není to nezávislý bezpečnostní audit. |
+| Uživatelé a soukromí | OWNER, hromadné jednorázové pozvánky s přehledem aktivací, blokace, sessions; uživatelská data oddělena na serveru. | Integrační kontroly izolace a souběžné aktivace, registrace přes kód v E2E; není to nezávislý bezpečnostní audit. |
 | Příjmy a výdaje | Vytvoření, úprava, smazání až v detailu, počáteční zůstatek každého účtu, přesné uložení v haléřích. | Výpočty a API pokryty testy. Evidence v CZK. |
 | Skutečné versus plánované | Plánované platby se do zůstatku započtou až po potvrzení se skutečným datem. | Ověřeno integračně. |
 | Dashboard a kalendáře | Období, týdenní a měsíční kalendář, denní platby a součty. | Responzivní web testován ve dvou velikostech. Denní analytický panel má prostor pro rozšíření. |

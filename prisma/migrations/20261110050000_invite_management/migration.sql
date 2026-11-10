@@ -1,0 +1,10 @@
+ALTER TABLE "Invite"
+  ADD COLUMN "code" TEXT,
+  ADD COLUMN "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ADD COLUMN "usedAt" TIMESTAMP(3),
+  ADD COLUMN "revokedAt" TIMESTAMP(3),
+  ADD COLUMN "createdById" TEXT,
+  ADD COLUMN "usedById" TEXT;
+ALTER TABLE "Invite" ADD CONSTRAINT "Invite_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Invite" ADD CONSTRAINT "Invite_usedById_fkey" FOREIGN KEY ("usedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+CREATE INDEX "Invite_createdById_createdAt_idx" ON "Invite"("createdById", "createdAt");

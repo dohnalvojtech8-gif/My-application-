@@ -1,3 +1,4 @@
+import { Invitations } from "./Invitations";
 import { Wallets, WalletSelect } from "./Wallets";
 import { BankSettings } from "./BankSettings";
 import { WidgetSettings } from "./WidgetSettings";
@@ -68,6 +69,15 @@ export function Settings({
       </details>
       <WidgetSettings items={data.items} wallets={data.wallets || []} />
       <BankSettings data={data} refresh={refresh} />
+      {data.user.role === "OWNER" && (
+        <details className="settings-group">
+          <summary>
+            <span>Uživatelé a pozvánky</span>
+            <small>Registrační kódy, aktivace a správa přístupu</small>
+          </summary>
+          <Admin />
+        </details>
+      )}
       <details className="settings-group">
         <summary>
           <span>Výběr položek a rychlé částky</span>
@@ -340,12 +350,10 @@ export function Settings({
 }
 export function Admin() {
   const [users, setUsers] = useState<any[]>([]),
-    [invites, setInvites] = useState<any[]>([]),
     [error, setError] = useState("");
   const load = async () => {
     try {
       setUsers(await call("/admin/users"));
-      setInvites(await call("/admin/invites"));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -354,52 +362,35 @@ export function Admin() {
     load();
   }, []);
   return (
-    <article>
-      <h2>Uživatelé a pozvánky</h2>
-      <p role="alert">{error}</p>
-      {users.map((u) => (
-        <div className="entry" key={u.id}>
-          <span>
-            {u.username} · {u.role}
-          </span>
-          {u.role !== "OWNER" && (
-            <button
-              onClick={async () => {
-                try {
-                  await call("/admin/users/" + u.id + "/block", {
-                    blocked: !u.blocked,
-                  });
-                  await load();
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            >
-              {u.blocked ? "Odblokovat" : "Blokovat"}
-            </button>
-          )}
-        </div>
-      ))}
-      {invites.map((i) => (
-        <div className="entry" key={i.token}>
-          <span>
-            {i.used ? "Použitá" : "Nepoužitá"} ·{" "}
-            {new Date(i.expires).toLocaleString("cs")}
-          </span>
-          <button
-            onClick={async () => {
-              try {
-                await call("/admin/invites/" + i.token, undefined, "DELETE");
-                await load();
-              } catch (e) {
-                setError((e as Error).message);
-              }
-            }}
-          >
-            Zrušit
-          </button>
-        </div>
-      ))}
-    </article>
+    <>
+      <Invitations />
+      <article>
+        <h2>Registrovaní uživatelé</h2>
+        <p role="alert">{error}</p>
+        {users.map((u) => (
+          <div className="entry" key={u.id}>
+            <span>
+              {u.username} · {u.role}
+            </span>
+            {u.role !== "OWNER" && (
+              <button
+                onClick={async () => {
+                  try {
+                    await call("/admin/users/" + u.id + "/block", {
+                      blocked: !u.blocked,
+                    });
+                    await load();
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
+                }}
+              >
+                {u.blocked ? "Odblokovat" : "Blokovat"}
+              </button>
+            )}
+          </div>
+        ))}
+      </article>
+    </>
   );
 }

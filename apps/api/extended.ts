@@ -107,18 +107,6 @@ export function installExtended(app: Express, db: PrismaClient) {
     ]);
     r.clearCookie("sid").json({ ok: true });
   });
-  app.get("/api/admin/invites", async (_q, r) =>
-    r.json(
-      await db.invite.findMany({
-        select: { token: true, expires: true, used: true },
-      }),
-    ),
-  );
-  app.delete("/api/admin/invites/:id", async (q, r) =>
-    r.json(
-      await db.invite.deleteMany({ where: { token: String(q.params.id) } }),
-    ),
-  );
   app.get("/api/series", async (_q, r) =>
     r.json(await db.series.findMany({ where: { userId: r.locals.user.id } })),
   );

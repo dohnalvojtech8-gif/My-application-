@@ -28,6 +28,8 @@ model User {
  subscriptions Subscription[]
  items Item[]
  entries Entry[]
+ issuedInvites Invite[] @relation("InviteCreator")
+ acceptedInvites Invite[] @relation("InviteRecipient")
 }
 model Bootstrap {
  id Int @id
@@ -42,6 +44,15 @@ model Invite {
  token String @id
  expires DateTime
  used Boolean @default(false)
+ code String?
+ createdAt DateTime @default(now())
+ usedAt DateTime?
+ revokedAt DateTime?
+ createdById String?
+ createdBy User? @relation("InviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+ usedById String?
+ usedBy User? @relation("InviteRecipient", fields: [usedById], references: [id], onDelete: SetNull)
+ @@index([createdById, createdAt])
 }
 model Item {
  id String @id @default(uuid())
