@@ -110,6 +110,33 @@ function App() {
       active = false;
     };
   }, [!!data]);
+  useEffect(() => {
+    if (!data) return;
+    let active = true;
+    const sync = () => {
+      if (document.visibilityState === "hidden") return;
+      void api("/data")
+        .then((next) => {
+          if (active) setData(next);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    const timer = window.setInterval(sync, 60000);
+    const listener = nativeWidgetSupport()
+      ? NativeApp.addListener("appStateChange", ({ isActive }) => {
+          if (isActive) sync();
+        })
+      : null;
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+      void listener?.then((handle) => handle.remove());
+    };
+  }, [!!data]);
   const submitKey = useRef(crypto.randomUUID());
   useEffect(() => {
     if (!form) return;

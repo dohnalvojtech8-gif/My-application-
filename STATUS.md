@@ -12,7 +12,7 @@
 
 - Web Push subscription, VAPID worker, centrum upozornění a noční klid: bez testu skutečného doručení na telefon.
 - PWA manifest, PNG/SVG ikony, service worker s offline zprávou: instalaci ověřit na cílových prohlížečích.
-- Xcode projekt s WidgetKit extension, konfigurací a App Intents pro přímé uložení: lokálně bez macOS/Xcode neověřeno; přidán macOS CI build. Test na fyzickém iPhonu a podpisy zbývají.
+- Xcode projekt s WidgetKit extension, konfigurací a App Intents pro přímé uložení: simulátorový build app + extension úspěšně ověřen na macOS v GitHub Actions. Test na fyzickém iPhonu a podpisy zbývají.
 - Android AppWidgetProvider s konfigurací, zůstatkem a přímou akcí: debug APK úspěšně sestaveno s JDK 21 a SDK 36. Instalace a funkčnost na fyzickém telefonu zatím neověřena.
 
 ## Odchylky od úplného původního zadání
@@ -39,4 +39,4 @@ Tento soubor záměrně rozlišuje implementaci, ověření a zbývající čás
 - Serverové předvolby, migrace, oddělené odvolatelné 30denní tokeny, Argon2 opětovné ověření hesla, secure storage v Android Keystore / iOS Keychain. Logout a změna hesla ruší přístupy.
 - Integrace ověřuje izolaci uživatelů, nepřístupnost obecného API widget tokenem, omezení částky serverovou předvolbou, pět souběžných duplicitních zápisů jako jedinou platbu, režim FORM, skrytí zůstatku, expiraci a odvolání.
 - Playwright ověřuje vytvoření předvolby a otevření předvyplněného formuláře bez automatického zaúčtování na desktopu i mobilním viewportu.
-- Android build sestaven; iOS zdroje a CI konfigurace připraveny. Žádný nativní test na zařízení zde není označen za dokončený.
+- Android debug APK a iOS simulátorový build včetně widget extension úspěšně sestaveny. Žádný nativní test na zařízení zde není označen za dokončený.
