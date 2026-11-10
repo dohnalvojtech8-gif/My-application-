@@ -1,3 +1,4 @@
+import { BankSettings } from "./BankSettings";
 import { WidgetSettings } from "./WidgetSettings";
 import { ItemEditor } from "./ItemEditor";
 import { useEffect, useState } from "react";
@@ -56,6 +57,7 @@ export function Settings({
       <p role="status">{message}</p>
       <ItemEditor items={data.items} refresh={refresh} />
       <WidgetSettings items={data.items} />
+      <BankSettings data={data} refresh={refresh} />
       <details className="settings-group">
         <summary>
           <span>Výběr položek a rychlé částky</span>

@@ -1,3 +1,4 @@
+import { BankReturn, captureBankReturn } from "./BankReturn";
 import { nativeWidgets, nativeWidgetSupport } from "./nativeWidgets";
 import { DashboardChart } from "./DashboardChart";
 import { itemStyle } from "./ItemEditor";
@@ -39,7 +40,7 @@ async function api(
         ? "Příliš mnoho pokusů. Vyčkejte několik minut."
         : "Server není dostupný. Zkuste to prosím znovu.",
   }));
-  if (!r.ok) throw Error(d.error);
+  if (!r.ok) throw Object.assign(new Error(d.error), { status: r.status });
   return d;
 }
 const money = (n: string | number) =>
@@ -63,6 +64,7 @@ type Data = {
   entries: Entry[];
   balance: string;
 };
+const pendingBankReturn = captureBankReturn();
 function App() {
   const [data, setData] = useState<Data | null>(null),
     [error, setError] = useState(""),
@@ -139,6 +141,17 @@ function App() {
       void listener?.then((handle) => handle.remove());
     };
   }, [!!data]);
+  useEffect(() => {
+    if (!data || !pendingBankReturn) return;
+    const payload = { ...pendingBankReturn };
+    pendingBankReturn.code = "";
+    if (!payload.code) return;
+    void api("/banks/complete", payload)
+      .then(() => {
+        setPage(3);
+      })
+      .catch((e) => setError(e.message));
+  }, [!!data]);
   const submitKey = useRef(crypto.randomUUID());
   useEffect(() => {
     if (!form) return;
@@ -175,7 +188,10 @@ function App() {
   const refresh = () =>
     api("/data")
       .then(setData)
-      .catch(() => setData(null));
+      .catch((e) => {
+        if (e.status === 401) setData(null);
+        else setError(e.message);
+      });
   async function checkSetup() {
     setSetupError("");
     setOpen(null);
@@ -948,13 +964,31 @@ function App() {
     </>
   );
 }
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  location.pathname === "/bank/callback" ? <BankReturn /> : <App />,
+);
 
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.register("/sw.js").catch(console.error);
 import { App as NativeApp } from "@capacitor/app";
 function openWidgetUrl(url: string) {
   const parsed = new URL(url);
+  if (parsed.protocol === "systematicmoney:" && parsed.hostname === "bank") {
+    const code = parsed.searchParams.get("code"),
+      state = parsed.searchParams.get("state");
+    if (code && code.length <= 2000 && state && /^[a-f0-9]{64}$/.test(state)) {
+      void import("@capacitor/browser")
+        .then(({ Browser }) => Browser.close())
+        .catch(() => {});
+      location.assign(
+        "/?bankCode=" +
+          encodeURIComponent(code) +
+          "&bankState=" +
+          encodeURIComponent(state),
+      );
+    }
+    return;
+  }
   if (parsed.protocol !== "systematicmoney:" || parsed.hostname !== "quick")
     return;
   const id = parsed.searchParams.get("action");

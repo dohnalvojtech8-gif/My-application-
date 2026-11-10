@@ -13,6 +13,9 @@ model User {
  blocked Boolean @default(false)
  opening BigInt @default(0)
  preferences Json @default("{}")
+ bankConnections BankConnection[]
+ bankAccounts BankAccount[]
+ bankTransactions BankTransaction[]
  widgetPanel Json @default("{}")
  quickActions QuickAction[]
  widgetDevices WidgetDevice[]
@@ -136,4 +139,63 @@ model WidgetDevice {
  showBalance Boolean @default(false)
  expiresAt DateTime
  @@index([userId])
+}
+
+model BankConnection {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ bank String
+ country String
+ psuType String
+ stateHash String @unique
+ stateExpires DateTime
+ status String @default("PENDING")
+ sessionSecret String?
+ validUntil DateTime?
+ syncedAt DateTime?
+ nextSyncAt DateTime @default(now())
+ lockUntil DateTime?
+ syncError String?
+ createdAt DateTime @default(now())
+ accounts BankAccount[]
+ @@unique([id,userId])
+ @@index([status,nextSyncAt])
+ @@index([userId,createdAt])
+}
+model BankAccount {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ connectionId String
+ connection BankConnection @relation(fields:[connectionId,userId],references:[id,userId],onDelete:Cascade)
+ identity String
+ remoteSecret String
+ name String
+ ibanMasked String
+ currency String
+ balances Json @default("[]")
+ transactions BankTransaction[]
+ @@unique([userId,identity])
+ @@unique([id,userId])
+ @@index([connectionId,userId])
+}
+model BankTransaction {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ accountId String
+ account BankAccount @relation(fields:[accountId,userId],references:[id,userId],onDelete:Cascade)
+ sourceKey String
+ amount String
+ currency String
+ kind String
+ date String
+ description String
+ uncertain Boolean @default(false)
+ state String @default("NEW")
+ entryId String? @unique
+ createdAt DateTime @default(now())
+ @@unique([accountId,sourceKey])
+ @@index([userId,state,date])
 }

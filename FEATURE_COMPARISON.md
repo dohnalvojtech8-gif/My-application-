@@ -40,7 +40,8 @@ Stav zpracování: 10. listopadu 2026. Spendee je popsáno podle oficiální dok
 | Panel 5 výdajů + 5 příjmů | Deset pevných pozic, prázdné sloty, prohození řádků, nastavení z webu. | API/E2E ověřeny. iPhone: plocha; Android zámek: jen podporované systémy/výrobci. |
 | Upozornění | Centrum, Web Push a plánovací worker. | Skutečné doručení na telefon neověřeno; nativní APNs/FCM chybí. |
 | Export a obnova | Webový CSV, PDF přes tisk, JSON záloha položek/transakcí. | Obnova omezená na prázdný účet; kompletní obnovu serveru z PostgreSQL je třeba provozně nacvičit. |
-| Banky, rozpočty a více peněženek | Zatím neimplementováno. | Významný rozdíl proti Spendee. |
+| Banky | Integrace Enable Banking implementovaná; aktivace poskytovatele a test živých účtů zbývají. | Revolut/ostatní banky podle aktuálního katalogu, ne všechny produkty. Viz BANKING.md. |
+| Rozpočty a více peněženek v osobní evidenci | Zatím neimplementováno. | Bankovní účty jsou samostatný přehled, nenahrazují plnohodnotné vícepeněženkové účetnictví. |
 | Další chybějící oblasti | AI účtenky, offline zápisy, společné peněženky, více měn, ucelený zámek celé aplikace. | Nejde o hotové funkce ani o slíbené datum dodání. |
 
 ## 3. Funkce a vlastnosti, které mohou dát výhodu

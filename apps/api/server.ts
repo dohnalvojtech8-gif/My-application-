@@ -1,3 +1,4 @@
+import { installBanking } from "./banking/routes.js";
 import { widgetRouter, installWidgetSettings } from "./widgets.js";
 import { brandMap } from "./catalog.js";
 import { allowedOrigins } from "./origin.js";
@@ -398,6 +399,7 @@ app.get("/api/events", async (_q, r) =>
     }),
   ),
 );
+installBanking(app, db);
 installWidgetSettings(app, db);
 installExtended(app, db);
 installUploads(app, db);

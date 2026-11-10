@@ -22,7 +22,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="systematicmoney" android:host="quick"/></intent-filter>
+            <intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="systematicmoney" android:host="quick"/><data android:scheme="systematicmoney" android:host="bank"/></intent-filter>
         </activity>
         <activity android:name=".WidgetAuthActivity" android:exported="false" android:excludeFromRecents="true" android:showWhenLocked="true" android:configChanges="orientation|screenSize" />
         <activity android:name=".WidgetConfigActivity" android:exported="true"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/></intent-filter></activity>

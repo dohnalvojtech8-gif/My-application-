@@ -8,7 +8,19 @@ export default defineConfig({
     reuseExistingServer: true,
   },
   projects: [
-    { name: "desktop", use: { viewport: { width: 1440, height: 900 } } },
-    { name: "mobile", use: { viewport: { width: 390, height: 844 } } },
+    {
+      name: "desktop",
+      use: {
+        viewport: { width: 1440, height: 900 },
+        extraHTTPHeaders: { "X-Forwarded-For": "198.51.100.10" },
+      },
+    },
+    {
+      name: "mobile",
+      use: {
+        viewport: { width: 390, height: 844 },
+        extraHTTPHeaders: { "X-Forwarded-For": "198.51.100.11" },
+      },
+    },
   ],
 });

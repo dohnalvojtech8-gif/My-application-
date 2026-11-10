@@ -1,6 +1,6 @@
-import { beforeAll, afterAll, it, expect } from "vitest";
+import { beforeAll, afterAll, it, expect, vi } from "vitest";
 import request from "supertest";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 const enabled = !!process.env.TEST_DATABASE_URL;
 const suite = enabled ? it : it.skip;
 let app: any, db: any;
@@ -472,6 +472,253 @@ suite(
       .get("/api/widget/snapshot")
       .set("Authorization", "Bearer " + loggedOut.token)
       .expect(401);
+  },
+  30000,
+);
+
+suite(
+  "banky: autorizace, stránkování, izolace, souběžný import a odpojení",
+  async () => {
+    const { enableBanking } = await import("../apps/api/banking/provider");
+    process.env.BANK_DATA_KEY = randomBytes(32).toString("hex");
+    process.env.BANK_REDIRECT_URL = origin + "/bank/callback";
+    const own = request.agent(app).set("X-Forwarded-For", "198.51.100.24"),
+      foreign = request.agent(app).set("X-Forwarded-For", "198.51.100.25");
+    const password = "test-password-12345";
+    await own
+      .post("/api/auth/login")
+      .set("Origin", origin)
+      .send({ username: "other", password })
+      .expect(200);
+    const ownerUser = await db.user.findFirst({ where: { role: "OWNER" } });
+    await foreign
+      .post("/api/auth/login")
+      .set("Origin", origin)
+      .send({ username: ownerUser.username, password })
+      .expect(200);
+    const uid = randomUUID(),
+      session = randomUUID();
+    let state = "",
+      exchanges = 0,
+      revoked = false;
+    const stub = vi
+      .spyOn(enableBanking, "request")
+      .mockImplementation(async (path, method, body: any) => {
+        if (path.startsWith("/aspsps"))
+          return {
+            aspsps: [
+              {
+                name: "Revolut",
+                country: "CZ",
+                psu_types: ["personal", "business"],
+                maximum_consent_validity: 86400,
+              },
+            ],
+          };
+        if (path === "/auth") {
+          state = body.state;
+          expect(body.psu_type).toBe("business");
+          return { url: "https://auth.enablebanking.com/ais/start?test=1" };
+        }
+        if (path === "/sessions") {
+          exchanges++;
+          return {
+            session_id: session,
+            access: {
+              valid_until: new Date(Date.now() + 86400000).toISOString(),
+            },
+            accounts: [
+              {
+                uid,
+                identification_hash: "same-account",
+                currency: "CZK",
+                name: "Revolut",
+                account_id: { iban: "CZ00000012345678" },
+              },
+            ],
+          };
+        }
+        if (method === "DELETE") {
+          revoked = true;
+          return {};
+        }
+        if (path.endsWith("/balances"))
+          return {
+            balances: [
+              {
+                balance_amount: { currency: "CZK", amount: "1000.00" },
+                balance_type: "CLBD",
+              },
+            ],
+          };
+        if (path.includes("/transactions"))
+          return {
+            transactions: [
+              {
+                entry_reference: path.includes("continuation_key")
+                  ? "second"
+                  : "first",
+                transaction_amount: {
+                  amount: path.includes("continuation_key") ? "10.00" : "49.90",
+                  currency: "CZK",
+                },
+                credit_debit_indicator: "DBIT",
+                status: "BOOK",
+                booking_date: "2026-11-10",
+                creditor: { name: "Obchod" },
+              },
+            ],
+            continuation_key: path.includes("continuation_key")
+              ? null
+              : "next-page",
+          };
+        throw Error("Unexpected test provider request");
+      });
+    try {
+      await own
+        .post("/api/banks/connect")
+        .set("Origin", origin)
+        .send({ bank: "Revolut", country: "CZ", psuType: "business" })
+        .expect(200);
+      await foreign
+        .post("/api/banks/complete")
+        .set("Origin", origin)
+        .send({ code: "code", state })
+        .expect(400);
+      await own
+        .post("/api/banks/complete")
+        .set("Origin", origin)
+        .send({ code: "code", state })
+        .expect(200);
+      await own
+        .post("/api/banks/complete")
+        .set("Origin", origin)
+        .send({ code: "code", state })
+        .expect(200);
+      expect(exchanges).toBe(1);
+      const c = (await own.get("/api/banks")).body.connections[0];
+      expect(c.sessionSecret).toBeUndefined();
+      expect(c.accounts[0].remoteSecret).toBeUndefined();
+      expect(c.accounts[0].ibanMasked).toBe("•••• 5678");
+      await foreign
+        .post("/api/banks/" + c.id + "/sync")
+        .set("Origin", origin)
+        .send({})
+        .expect(409);
+      const sync = await Promise.all([
+        own
+          .post("/api/banks/" + c.id + "/sync")
+          .set("Origin", origin)
+          .send({}),
+        own
+          .post("/api/banks/" + c.id + "/sync")
+          .set("Origin", origin)
+          .send({}),
+      ]);
+      expect(sync.map((s) => s.status).sort()).toEqual([200, 409]);
+      const rows = (await own.get("/api/bank-transactions")).body.rows;
+      expect(rows).toHaveLength(2);
+      expect(
+        (await foreign.get("/api/bank-transactions")).body.rows,
+      ).toHaveLength(0);
+      await db.bankConnection.update({
+        where: { id: c.id },
+        data: { nextSyncAt: new Date(0) },
+      });
+      await own
+        .post("/api/banks/" + c.id + "/sync")
+        .set("Origin", origin)
+        .send({})
+        .expect(200);
+      expect((await own.get("/api/bank-transactions")).body.rows).toHaveLength(
+        2,
+      );
+      const data = (await own.get("/api/data")).body,
+        item = data.items.find((i: any) => i.kind === "EXPENSE" && !i.hidden),
+        row = rows.find((t: any) => t.amount === "49.90");
+      await foreign
+        .post("/api/bank-transactions/" + row.id + "/resolve")
+        .set("Origin", origin)
+        .send({ action: "IMPORT", itemId: item.id })
+        .expect(404);
+      const imports = await Promise.all(
+        Array.from({ length: 4 }, () =>
+          own
+            .post("/api/bank-transactions/" + row.id + "/resolve")
+            .set("Origin", origin)
+            .send({ action: "IMPORT", itemId: item.id }),
+        ),
+      );
+      expect(imports.every((r) => r.status === 200)).toBe(true);
+      expect(new Set(imports.map((r) => r.body.entryId)).size).toBe(1);
+      const after = (await own.get("/api/data")).body;
+      expect(BigInt(after.balance)).toBe(BigInt(data.balance) - 4990n);
+      const second = rows.find((t: any) => t.amount === "10.00");
+      const manual = (
+        await own.post("/api/entries").set("Origin", origin).send({
+          itemId: item.id,
+          amount: "10",
+          date: "2026-11-10",
+          key: randomUUID(),
+        })
+      ).body;
+      await own
+        .post("/api/bank-transactions/" + second.id + "/resolve")
+        .set("Origin", origin)
+        .send({ action: "LINK", entryId: manual.id })
+        .expect(200);
+      expect(BigInt((await own.get("/api/data")).body.balance)).toBe(
+        BigInt(after.balance) - 1000n,
+      );
+      const foreignMoney = await db.bankTransaction
+        .create({
+          data: {
+            userId: ownerUser.id,
+            accountId: c.accounts[0].id,
+            sourceKey: "foreign",
+            amount: "1",
+            currency: "CZK",
+            kind: "EXPENSE",
+            date: "2026-11-10",
+            description: "test",
+          },
+        })
+        .then(
+          () => true,
+          () => false,
+        );
+      expect(foreignMoney).toBe(false);
+      await own
+        .delete("/api/banks/" + c.id)
+        .set("Origin", origin)
+        .expect(200);
+      expect(revoked).toBe(true);
+      await own
+        .post("/api/banks/" + c.id + "/sync")
+        .set("Origin", origin)
+        .send({})
+        .expect(409);
+      for (const project of ["desktop", "mobile"])
+        await db.bankTransaction.create({
+          data: {
+            userId: (await db.user.findUnique({ where: { username: "other" } }))
+              .id,
+            accountId: c.accounts[0].id,
+            sourceKey: "ui-" + project,
+            amount: "20.00",
+            currency: "EUR",
+            kind: "EXPENSE",
+            date: "2026-11-10",
+            description: "Bankovní test " + project,
+            uncertain: true,
+          },
+        });
+      // Keep only synthetic, anonymized imported entries for subsequent UI tests.
+    } finally {
+      stub.mockRestore();
+      delete process.env.BANK_DATA_KEY;
+      delete process.env.BANK_REDIRECT_URL;
+    }
   },
   30000,
 );

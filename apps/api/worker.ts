@@ -1,3 +1,5 @@
+import { enableBanking, configured } from "./banking/provider.js";
+import { syncConnection } from "./banking/sync.js";
 import { PrismaClient } from "@prisma/client";
 import webpush from "web-push";
 import { generate } from "./extended.js";
@@ -9,6 +11,23 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY)
     process.env.VAPID_PRIVATE_KEY,
   );
 try {
+  if (configured()) {
+    for (const c of await db.bankConnection.findMany({
+      where: {
+        status: "ACTIVE",
+        validUntil: { gt: new Date() },
+        nextSyncAt: { lte: new Date() },
+        user: { blocked: false },
+      },
+      take: 50,
+    })) {
+      try {
+        await syncConnection(db, enableBanking, c.userId, c.id);
+      } catch {
+        console.error("Bank synchronization failed", c.id);
+      }
+    }
+  }
   const now = new Date(),
     date = new Intl.DateTimeFormat("sv-SE", {
       timeZone: "Europe/Prague",

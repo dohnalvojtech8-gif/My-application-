@@ -3,9 +3,9 @@
 ## Ověřeno
 
 - Produkční build Vite, TypeScript, generování Prisma klienta a migrace na PostgreSQL 16.
-- 8 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování.
+- 10 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování.
 - Integrační scénář: souběžná první registrace, jediný OWNER, uzavření registrace, jednorázová pozvánka, přihlášení, zákaz běžné administrace pro USER, kontrola Origin, izolace OWNER/USER, vytvoření/úprava/smazání/potvrzení, idempotence, opakování bez duplicit, zachování přeskočených výskytů, zákaz cizího uploadu a neplatného obrazového formátu, obnova s novými ID, zákaz obnovy do neprázdného účtu, blokování sessions.
-- 14 Chromium/Playwright testů: přihlášení, dashboard, nastavení a analytika při 1440×900 a 390×844; kontrola vodorovného přetečení.
+- 18 Chromium/Playwright testů: přihlášení, dashboard, nastavení a analytika při 1440×900 a 390×844; kontrola vodorovného přetečení.
 - Render YAML vyhovuje veřejnému schématu draft 2020-12.
 
 ## Implementováno, vyžaduje provozní ověření
@@ -47,3 +47,10 @@ Tento soubor záměrně rozlišuje implementaci, ověření a zbývající čás
 - Android: výběr jednoduchého tlačítka, jedné akce nebo panelu; přímé platby výhradně přes neexportovanou Activity s ověřením systémového zámku. Zámek widgetů závisí na verzi systému/výrobci.
 - Server a editor: pevně deset pozic, prohazování řádků, kontrola vlastnictví a typu, prázdné pozice při odstranění předvolby. Žádná platba nevzniká pouhou konfigurací.
 - Android debug build i iOS simulátorový build této aktualizace včetně všech widgetů prošly v GitHub Actions (Native apps, běh 42823446720). Webové CI rovněž prošlo (Validate, běh 42823446727). Ověření na skutečném iPhone 13 a Android telefonu není provedeno.
+
+## Bankovní integrace (10. 11. 2026)
+
+- Implementováno Enable Banking AIS: živý katalog podle země a osobního/firemního účtu (včetně dostupných konektorů Revolutu), autorizace, souhlasy, zůstatky, stránkovaná synchronizace, import/párování a odpojení.
+- Bankovní zůstatky zůstávají v původní měně, evidence je nadále CZK. Nejde o záruku podpory všech bank a produktů ani o automatické bankovní účtování bez kontroly uživatele.
+- Testy používají skutečnou PostgreSQL a testovací odpovědi poskytovatele. Živý ani poskytovatelův sandbox účet nebyl připojen; aktivaci a vlastní klíče musí zajistit provozovatel podle [BANKING.md](BANKING.md).
+- Automatický worker potřebuje stejné bankovní klíče jako web. Sestavení nativních aplikací nezajišťuje jejich podpis ani instalaci na uživatelův telefon.
