@@ -5,6 +5,7 @@ if (serverUrl && !serverUrl.startsWith("https://"))
 const config: CapacitorConfig = {
   appId: "cz.systematic.money",
   appName: "SYSTEMATIC MONEY",
+  loggingBehavior: "none",
   webDir: "dist/web",
   ...(serverUrl ? { server: { url: serverUrl, cleartext: false } } : {}),
 };
