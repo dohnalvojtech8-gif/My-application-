@@ -2,7 +2,8 @@ import Foundation
 import Security
 struct WidgetCredentials: Codable { let origin: String; let token: String; let deviceId: String }
 struct QuickPreset: Codable, Identifiable { let id: String; let name: String; let itemId: String; let kind: String; let amount: String; let mode: String; let showBalance: Bool; let color: String }
-struct WidgetSnapshot: Codable { let balance: String?; let actions: [QuickPreset]; let updatedAt: String }
+struct WidgetPanel: Codable { let incomeFirst: Bool; let expenses: [QuickPreset?]; let incomes: [QuickPreset?] }
+struct WidgetSnapshot: Codable { let panel: WidgetPanel?; let balance: String?; let actions: [QuickPreset]; let updatedAt: String }
 enum WidgetFailure: Error, LocalizedError { case disconnected, invalidServer, requestFailed
  var errorDescription: String? { switch self { case .disconnected:return "Připojte widgety v aplikaci.";case .invalidServer:return "Neplatná adresa serveru.";case .requestFailed:return "Platbu nelze potvrdit. Obnovte připojení a zkuste stejnou akci znovu." } }
 }

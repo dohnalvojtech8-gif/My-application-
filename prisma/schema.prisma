@@ -13,6 +13,7 @@ model User {
  blocked Boolean @default(false)
  opening BigInt @default(0)
  preferences Json @default("{}")
+ widgetPanel Json @default("{}")
  quickActions QuickAction[]
  widgetDevices WidgetDevice[]
  events Event[]

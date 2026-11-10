@@ -1,3 +1,4 @@
+import { WidgetPanelSettings } from "./WidgetPanelSettings";
 import { useEffect, useState } from "react";
 import { Smartphone, Plus, Trash2, RefreshCw, ShieldCheck } from "lucide-react";
 import { call } from "./Settings";
@@ -45,8 +46,8 @@ export function WidgetSettings({ items }: { items: any[] }) {
         <p role="status">{message}</p>
         <p>
           Každý widget může používat vlastní položku a částku. Režim „Formulář“
-          otevře předvyplněnou platbu; „Přímé uložení“ ji uloží po klepnutí na
-          odemčeném telefonu.
+          otevře předvyplněnou platbu; „Přímé uložení“ ji uloží po systémovém
+          ověření telefonu.
         </p>
         <form
           onSubmit={(e) => {
@@ -128,6 +129,7 @@ export function WidgetSettings({ items }: { items: any[] }) {
             </button>
           </div>
         ))}
+        <WidgetPanelSettings actions={actions} items={items} />
         <h3>Připojení telefonu</h3>
         {nativeWidgetSupport() ? (
           <>
@@ -261,10 +263,12 @@ export function WidgetSettings({ items }: { items: any[] }) {
           </div>
         ))}
         <p className="editor-help">
-          Po přímém uložení zvolte ve widgetu Obnovit, pokud chcete zadat další
-          stejnou platbu. Opakované klepnutí na původní akci neopakuje platbu.
-          Na zamčené obrazovce iOS widget otevírá formulář; zůstatek je označen
-          jako soukromý údaj.
+          Po úspěšném uložení se připraví další platba. Opakované odeslání
+          původní akce nezaloží duplicitu. Ověření zajišťuje systém telefonu;
+          iOS může použít Face ID nebo již odemčený stav. Na zamčené obrazovce
+          iOS lze použít samostatný příjem, výdaj nebo přímou akci po ověření
+          systému. Panel 5 + 5 patří na plochu. Heslo telefonu aplikace nikdy
+          nečte.
         </p>
       </article>
     </details>

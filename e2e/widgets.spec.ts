@@ -34,3 +34,55 @@ test("rychlá akce widgetu otevře předvyplněný formulář bez automatického
     headers: { Origin: "http://localhost:3000" },
   });
 });
+
+test("tlačítka příjem a výdaj otevřou správný list bez zápisu", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("Uživatelské jméno").fill("other");
+  await page.getByLabel("Heslo (alespoň 12 znaků)").fill("test-password-12345");
+  await page.getByRole("button", { name: "Přihlásit se", exact: true }).click();
+  await expect(page.locator("nav")).toBeVisible();
+  const before = await (await page.request.get("/api/data")).json();
+  for (const [kind, heading] of [
+    ["INCOME", "Nový příjem"],
+    ["EXPENSE", "Nový výdaj"],
+  ]) {
+    await page.goto("/?quick=" + kind);
+    await expect(
+      page.getByRole("dialog").getByRole("heading", { name: heading }),
+    ).toBeVisible();
+  }
+  expect(
+    (await (await page.request.get("/api/data")).json()).entries.length,
+  ).toBe(before.entries.length);
+});
+
+test("panel widgetu zachová deset pozic a prohodí pořadí řádků", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("Uživatelské jméno").fill("other");
+  await page.getByLabel("Heslo (alespoň 12 znaků)").fill("test-password-12345");
+  await page.getByRole("button", { name: "Přihlásit se", exact: true }).click();
+  await page.locator("nav").getByRole("button", { name: "Nastavení" }).click();
+  await page
+    .locator("summary")
+    .filter({ hasText: "Widgety a rychlé akce" })
+    .click();
+  const panel = page.getByRole("region", { name: "Panel deseti plateb" });
+  await expect(panel.getByRole("combobox")).toHaveCount(11);
+  await panel.getByLabel("Pořadí řádků").selectOption("false");
+  await panel.getByRole("button", { name: "Uložit panel widgetu" }).click();
+  await expect(panel.getByRole("status")).toContainText("Panel uložen");
+  await page.reload();
+  await page.locator("nav").getByRole("button", { name: "Nastavení" }).click();
+  await page
+    .locator("summary")
+    .filter({ hasText: "Widgety a rychlé akce" })
+    .click();
+  await expect(panel.getByLabel("Pořadí řádků")).toHaveValue("false");
+  await expect(panel.locator("legend").first()).toHaveText("Výdaje");
+  await panel.getByLabel("Pořadí řádků").selectOption("true");
+  await expect(panel.locator("legend").first()).toHaveText("Příjmy");
+});

@@ -75,8 +75,10 @@ function App() {
     [authBusy, setAuthBusy] = useState(false),
     [authNotice, setAuthNotice] = useState(""),
     [form, setForm] = useState(
-      new URLSearchParams(location.search).get("quick") === "EXPENSE"
-        ? "EXPENSE"
+      ["INCOME", "EXPENSE"].includes(
+        new URLSearchParams(location.search).get("quick") || "",
+      )
+        ? new URLSearchParams(location.search).get("quick")!
         : "",
     ),
     [date, setDate] = useState(
@@ -959,7 +961,8 @@ function openWidgetUrl(url: string) {
   const target =
     id && /^[a-f0-9-]{36}$/i.test(id)
       ? "/?action=" + encodeURIComponent(id)
-      : "/?quick=EXPENSE";
+      : "/?quick=" +
+        (parsed.searchParams.get("kind") === "INCOME" ? "INCOME" : "EXPENSE");
   if (location.pathname + location.search !== target) location.assign(target);
 }
 NativeApp.addListener("appUrlOpen", ({ url }) => openWidgetUrl(url));

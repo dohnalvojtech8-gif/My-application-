@@ -19,6 +19,25 @@ const preset = z.object({
   mode: z.enum(["DIRECT", "FORM"]).default("FORM"),
   showBalance: z.boolean().default(false),
 });
+const panelSchema = z
+  .object({
+    incomeFirst: z.boolean(),
+    expenses: z.array(z.string().uuid().nullable()).length(5),
+    incomes: z.array(z.string().uuid().nullable()).length(5),
+  })
+  .superRefine((v, ctx) => {
+    const ids = [...v.expenses, ...v.incomes].filter(Boolean);
+    if (new Set(ids).size !== ids.length)
+      ctx.addIssue({
+        code: "custom",
+        message: "Každou akci vyberte jen jednou",
+      });
+  });
+const emptyPanel = () => ({
+  incomeFirst: false,
+  expenses: Array(5).fill(null),
+  incomes: Array(5).fill(null),
+});
 export function widgetRouter(db: PrismaClient) {
   const router = Router();
   router.use(async (q, r, next) => {
@@ -70,7 +89,21 @@ export function widgetRouter(db: PrismaClient) {
           include: { item: true },
         })
       : [];
+    const parsedPanel = panelSchema.safeParse(d.user.widgetPanel);
+    const panel = parsedPanel.success ? parsedPanel.data : emptyPanel();
+    const resolveSlots = (ids: (string | null)[], kind: string) =>
+      ids.map(
+        (id) =>
+          available.find(
+            (a) => a.id === id && a.kind === kind && a.mode === "DIRECT",
+          ) ?? null,
+      );
     r.json({
+      panel: {
+        incomeFirst: panel.incomeFirst,
+        expenses: resolveSlots(panel.expenses, "EXPENSE"),
+        incomes: resolveSlots(panel.incomes, "INCOME"),
+      },
       balance: d.showBalance
         ? balance(d.user.opening, entries).toString()
         : null,
@@ -129,6 +162,61 @@ export function widgetRouter(db: PrismaClient) {
   return router;
 }
 export function installWidgetSettings(app: Express, db: PrismaClient) {
+  app.get("/api/widget-panel", async (_q, r) => {
+    const parsed = panelSchema.safeParse(r.locals.user.widgetPanel);
+    const panel = parsed.success ? parsed.data : emptyPanel();
+    const userId = r.locals.user.id;
+    const actions = await db.quickAction.findMany({
+      where: { userId, mode: "DIRECT" },
+    });
+    const items = await db.item.findMany({
+      where: { userId, deletedAt: null, hidden: false },
+    });
+    const clean = (ids: (string | null)[], kind: string) =>
+      ids.map((id) => {
+        const a = actions.find((a) => a.id === id);
+        return a && items.some((i) => i.id === a.itemId && i.kind === kind)
+          ? id
+          : null;
+      });
+    r.json({
+      incomeFirst: panel.incomeFirst,
+      expenses: clean(panel.expenses, "EXPENSE"),
+      incomes: clean(panel.incomes, "INCOME"),
+    });
+  });
+  app.put("/api/widget-panel", async (q, r) => {
+    const panel = panelSchema.parse(q.body),
+      userId = r.locals.user.id;
+    const actions = await db.quickAction.findMany({
+      where: { userId, mode: "DIRECT" },
+    });
+    const items = await db.item.findMany({
+      where: { userId, deletedAt: null, hidden: false },
+    });
+    for (const [kind, ids] of [
+      ["EXPENSE", panel.expenses],
+      ["INCOME", panel.incomes],
+    ] as const) {
+      for (const id of ids) {
+        if (id === null) continue;
+        const action = actions.find((a) => a.id === id);
+        if (
+          !action ||
+          !items.some((i) => i.id === action.itemId && i.kind === kind)
+        )
+          return r.status(400).json({
+            error:
+              "Panel smí obsahovat jen vlastní dostupné přímé akce správného typu",
+          });
+      }
+    }
+    await db.user.update({
+      where: { id: userId },
+      data: { widgetPanel: panel },
+    });
+    r.json(panel);
+  });
   app.get("/api/quick-actions", async (_q, r) =>
     r.json(
       await db.quickAction.findMany({

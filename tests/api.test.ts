@@ -302,6 +302,94 @@ suite(
         .expect(200)
     ).body;
     expect(before.actions).toHaveLength(1);
+    const incomeItem = (
+      await other
+        .post("/api/items")
+        .set("Origin", origin)
+        .send({ name: "Widget příjem", kind: "INCOME", color: "#22aa66" })
+        .expect(200)
+    ).body;
+    const expenses = [action.id],
+      incomes: string[] = [];
+    for (let n = 0; n < 5; n++) {
+      incomes.push(
+        (
+          await other
+            .post("/api/quick-actions")
+            .set("Origin", origin)
+            .send({
+              name: `Příjem ${n}`,
+              itemId: incomeItem.id,
+              amount: "100",
+              mode: "DIRECT",
+            })
+            .expect(200)
+        ).body.id,
+      );
+      if (n > 0)
+        expenses.push(
+          (
+            await other
+              .post("/api/quick-actions")
+              .set("Origin", origin)
+              .send({
+                name: `Výdaj ${n}`,
+                itemId: item.id,
+                amount: "10",
+                mode: "DIRECT",
+              })
+              .expect(200)
+          ).body.id,
+        );
+    }
+    const panel = { incomeFirst: true, expenses, incomes };
+    await other
+      .put("/api/widget-panel")
+      .set("Origin", origin)
+      .send(panel)
+      .expect(200);
+    expect((await other.get("/api/widget-panel")).body).toEqual(panel);
+    const panelSnapshot = (
+      await request(app).get("/api/widget/snapshot").set("Authorization", auth)
+    ).body;
+    expect(panelSnapshot.panel.incomeFirst).toBe(true);
+    expect(panelSnapshot.panel.expenses.map((a: any) => a.id)).toEqual(
+      expenses,
+    );
+    expect(panelSnapshot.panel.incomes.map((a: any) => a.id)).toEqual(incomes);
+    expect(panelSnapshot.balance).toBe(before.balance); // Configuring widgets never books payments.
+    await owner
+      .put("/api/widget-panel")
+      .set("Origin", origin)
+      .send(panel)
+      .expect(400);
+    await other
+      .put("/api/widget-panel")
+      .set("Origin", "https://evil.example")
+      .send(panel)
+      .expect(403);
+    await other
+      .put("/api/widget-panel")
+      .set("Origin", origin)
+      .send({ ...panel, incomes: expenses })
+      .expect(400);
+    await other
+      .put("/api/widget-panel")
+      .set("Origin", origin)
+      .send({ ...panel, incomes: incomes.slice(0, 4) })
+      .expect(400);
+    await other
+      .delete("/api/quick-actions/" + expenses[4])
+      .set("Origin", origin)
+      .expect(200);
+    expect(
+      (
+        await request(app)
+          .get("/api/widget/snapshot")
+          .set("Authorization", auth)
+      ).body.panel.expenses[4],
+    ).toBeNull();
+
     const requestId = randomUUID();
     const responses = await Promise.all(
       Array.from({ length: 5 }, () =>

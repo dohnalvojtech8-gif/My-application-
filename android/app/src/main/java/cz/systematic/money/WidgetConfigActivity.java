@@ -1,5 +1,24 @@
 package cz.systematic.money;
 import android.app.*;import android.appwidget.*;import android.content.*;import android.os.Bundle;import android.widget.*;import org.json.*;
 public class WidgetConfigActivity extends Activity {
- @Override public void onCreate(Bundle state){super.onCreate(state);setResult(RESULT_CANCELED);int id=getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,-1);if(id<0){finish();return;}LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);layout.setPadding(32,48,32,32);TextView title=new TextView(this);title.setText("SYSTEMATIC MONEY\nVyberte rychlou akci widgetu");title.setTextSize(21);layout.addView(title);ScrollView scroll=new ScrollView(this);scroll.addView(layout);setContentView(scroll);MoneyWidget.executor.execute(()->{try{JSONArray actions=WidgetAPI.request(this,"/snapshot",null).getJSONArray("actions");runOnUiThread(()->{if(actions.length()==0){TextView empty=new TextView(this);empty.setText("Nejprve vytvořte rychlé akce v Nastavení → Widgety.");layout.addView(empty);}for(int i=0;i<actions.length();i++){JSONObject a=actions.optJSONObject(i);Button button=new Button(this);button.setText(a.optString("name")+" · "+MoneyWidget.money(a.optString("amount"))+" · "+(a.optString("mode").equals("DIRECT")?"Přímé uložení":"Formulář"));button.setOnClickListener(v->{WidgetStore.prefs(this).edit().putString("action_"+id,a.optString("id")).apply();MoneyWidget.executor.execute(()->MoneyWidget.update(this,id,true));setResult(RESULT_OK,new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id));finish();});layout.addView(button);}});}catch(Exception e){runOnUiThread(()->{TextView error=new TextView(this);error.setText("Otevřete aplikaci a v Nastavení → Widgety připojte toto zařízení.");layout.addView(error);});}});}
+    private int widgetId;
+    private LinearLayout layout;
+    private void option(String title,String mode,String action){
+        Button button=new Button(this);button.setText(title);layout.addView(button);
+        button.setOnClickListener(v->{WidgetStore.prefs(this).edit().putString("mode_"+widgetId,mode).putString("action_"+widgetId,action).commit();MoneyWidget.executor.execute(()->MoneyWidget.update(this,widgetId,false));setResult(RESULT_OK,new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,widgetId));finish();});
+    }
+    @Override public void onCreate(Bundle state){
+        super.onCreate(state);setResult(RESULT_CANCELED);
+        widgetId=getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,-1);if(widgetId<0){finish();return;}
+        layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);layout.setPadding(24,40,24,24);
+        TextView title=new TextView(this);title.setText("SYSTEMATIC MONEY · Typ widgetu");title.setTextSize(21);layout.addView(title);
+        ScrollView scroll=new ScrollView(this);scroll.addView(layout);setContentView(scroll);
+        option("+ Příjem · otevřít příjmový list","INCOME","");
+        option("− Výdaj · otevřít výdajový list","EXPENSE","");
+        option("Panel 5 výdajů + 5 příjmů","PANEL","");
+        MoneyWidget.executor.execute(()->{try{
+            JSONArray actions=WidgetAPI.request(this,"/snapshot",null).getJSONArray("actions");
+            runOnUiThread(()->{for(int n=0;n<actions.length();n++){JSONObject a=actions.optJSONObject(n);option(a.optString("name")+" · "+MoneyWidget.money(a.optString("amount"))+" · "+(a.optString("mode").equals("DIRECT")?"ověřit a uložit":"formulář"),"SINGLE",a.optString("id"));}});
+        }catch(Exception e){runOnUiThread(()->{TextView note=new TextView(this);note.setText("Pro přednastavené platby připojte widgety v Nastavení aplikace. Jednoduchý Příjem a Výdaj připojení widgetu nepotřebují.");layout.addView(note);});}});
+    }
 }

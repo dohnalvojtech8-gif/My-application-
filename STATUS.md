@@ -5,7 +5,7 @@
 - Produkční build Vite, TypeScript, generování Prisma klienta a migrace na PostgreSQL 16.
 - 8 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování.
 - Integrační scénář: souběžná první registrace, jediný OWNER, uzavření registrace, jednorázová pozvánka, přihlášení, zákaz běžné administrace pro USER, kontrola Origin, izolace OWNER/USER, vytvoření/úprava/smazání/potvrzení, idempotence, opakování bez duplicit, zachování přeskočených výskytů, zákaz cizího uploadu a neplatného obrazového formátu, obnova s novými ID, zákaz obnovy do neprázdného účtu, blokování sessions.
-- 10 Chromium/Playwright testů: přihlášení, dashboard, nastavení a analytika při 1440×900 a 390×844; kontrola vodorovného přetečení.
+- 14 Chromium/Playwright testů: přihlášení, dashboard, nastavení a analytika při 1440×900 a 390×844; kontrola vodorovného přetečení.
 - Render YAML vyhovuje veřejnému schématu draft 2020-12.
 
 ## Implementováno, vyžaduje provozní ověření
@@ -17,7 +17,7 @@
 
 ## Odchylky od úplného původního zadání
 
-- Widgety jsou implementované pro formulář i přímý zápis předvolených příjmů/výdajů a volitelný zůstatek. Přímý zápis na zamčené obrazovce iOS se nenabízí. Viz [MOBILE.md](MOBILE.md) pro nastavení a platformní omezení.
+- Widgety jsou implementované pro formulář i přímý zápis předvolených příjmů/výdajů a volitelný zůstatek. Jednotlivé přímé akce na zamčené obrazovce iOS používají systémové ověření; velký panel 5 + 5 se nabízí na ploše. Viz [MOBILE.md](MOBILE.md) pro nastavení a platformní omezení.
 - Mobilní push používá webovou cestu tam, kde ji systém podporuje; samostatné nativní APNs/FCM doručování není implementované.
 - Bez tematických presetů a změny měny (aktuálně CZK), individuálních upozornění na jednotlivé série, úplného auditu systémových událostí a více peněženek.
 - Uživatelská obnova nepřenáší série ani preference; kompletní provozní obnova je přes PostgreSQL.
@@ -40,3 +40,10 @@ Tento soubor záměrně rozlišuje implementaci, ověření a zbývající čás
 - Integrace ověřuje izolaci uživatelů, nepřístupnost obecného API widget tokenem, omezení částky serverovou předvolbou, pět souběžných duplicitních zápisů jako jedinou platbu, režim FORM, skrytí zůstatku, expiraci a odvolání.
 - Playwright ověřuje vytvoření předvolby a otevření předvyplněného formuláře bez automatického zaúčtování na desktopu i mobilním viewportu.
 - Android debug APK a iOS simulátorový build včetně widget extension úspěšně sestaveny. Žádný nativní test na zařízení zde není označen za dokončený.
+
+## Rozšíření widgetů: zamčená obrazovka a panel 5 + 5
+
+- iOS: samostatné widgety Příjem a Výdaj pro otevření listu, jednotlivá přímá akce s požadavkem na místní odemčení a nový panel deseti plateb na domovské obrazovce.
+- Android: výběr jednoduchého tlačítka, jedné akce nebo panelu; přímé platby výhradně přes neexportovanou Activity s ověřením systémového zámku. Zámek widgetů závisí na verzi systému/výrobci.
+- Server a editor: pevně deset pozic, prohazování řádků, kontrola vlastnictví a typu, prázdné pozice při odstranění předvolby. Žádná platba nevzniká pouhou konfigurací.
+- Android debug build této aktualizace prošel. Nové iOS zdroje čekají na výsledek macOS CI; dřívější verze se sestavila úspěšně. Ověření na skutečném iPhone 13 a Android telefonu není provedeno.

@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "widgetPanel" JSONB NOT NULL DEFAULT '{}';
