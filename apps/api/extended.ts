@@ -88,6 +88,7 @@ export function installExtended(app: Express, db: PrismaClient) {
         data: { password: await argon2.hash(v.password) },
       }),
       db.session.deleteMany({ where: { userId: r.locals.user.id } }),
+      db.widgetDevice.deleteMany({ where: { userId: r.locals.user.id } }),
     ]);
     r.clearCookie("sid").json({ ok: true });
   });

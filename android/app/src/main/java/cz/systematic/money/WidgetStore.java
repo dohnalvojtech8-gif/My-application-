@@ -1,0 +1,9 @@
+package cz.systematic.money;
+import android.content.*;import android.security.keystore.*;import android.util.Base64;import java.security.KeyStore;import javax.crypto.*;import javax.crypto.spec.GCMParameterSpec;import org.json.*;
+final class WidgetStore {
+ static android.content.SharedPreferences prefs(Context c){return c.getSharedPreferences("money_widgets",Context.MODE_PRIVATE);}
+ static javax.crypto.SecretKey key()throws Exception{KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);if(!ks.containsAlias("money_widgets")){KeyGenerator g=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");g.init(new KeyGenParameterSpec.Builder("money_widgets",KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build());g.generateKey();}return (javax.crypto.SecretKey)ks.getKey("money_widgets",null);}
+ static void save(Context c,JSONObject v)throws Exception{Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,key());String encrypted=Base64.encodeToString(cipher.doFinal(v.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)),Base64.NO_WRAP);prefs(c).edit().clear().putString("credentials",encrypted).putString("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP)).commit();}
+ static JSONObject read(Context c)throws Exception{String encrypted=prefs(c).getString("credentials",null);if(encrypted==null)throw new Exception("Připojte widgety v aplikaci");Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,Base64.decode(prefs(c).getString("iv",""),Base64.NO_WRAP)));return new JSONObject(new String(cipher.doFinal(Base64.decode(encrypted,Base64.NO_WRAP)),java.nio.charset.StandardCharsets.UTF_8));}
+ static void clear(Context c){prefs(c).edit().clear().commit();}
+}

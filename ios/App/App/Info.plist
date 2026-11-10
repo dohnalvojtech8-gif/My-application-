@@ -75,5 +75,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>WidgetKeychainGroup</key>
+	<string>$(AppIdentifierPrefix)cz.systematic.money.shared</string>
 </dict>
 </plist>

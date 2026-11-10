@@ -1,3 +1,4 @@
+import { WidgetSettings } from "./WidgetSettings";
 import { ItemEditor } from "./ItemEditor";
 import { useEffect, useState } from "react";
 export async function call(
@@ -54,6 +55,7 @@ export function Settings({
     <>
       <p role="status">{message}</p>
       <ItemEditor items={data.items} refresh={refresh} />
+      <WidgetSettings items={data.items} />
       <details className="settings-group">
         <summary>
           <span>Výběr položek a rychlé částky</span>

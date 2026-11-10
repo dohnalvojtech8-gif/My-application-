@@ -1,3 +1,4 @@
+import { widgetRouter, installWidgetSettings } from "./widgets.js";
 import { brandMap } from "./catalog.js";
 import { allowedOrigins } from "./origin.js";
 import { installRestore } from "./restore.js";
@@ -34,6 +35,7 @@ app.use(
       req.method === "GET" && /^\/brands\/[^/]+\/icon$/.test(req.path),
   }),
 );
+app.use("/api/widget", widgetRouter(db));
 app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   if (
@@ -136,6 +138,7 @@ app.use("/api", async (q, r, next) => {
   next();
 });
 app.post("/api/logout", async (q, r) => {
+  await db.widgetDevice.deleteMany({ where: { userId: r.locals.user.id } });
   await db.session.deleteMany({ where: { token: hash(q.cookies.sid || "") } });
   r.clearCookie("sid").json({ ok: true });
 });
@@ -395,6 +398,7 @@ app.get("/api/events", async (_q, r) =>
     }),
   ),
 );
+installWidgetSettings(app, db);
 installExtended(app, db);
 installUploads(app, db);
 installRestore(app, db);

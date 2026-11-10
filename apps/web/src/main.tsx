@@ -1,3 +1,4 @@
+import { nativeWidgets, nativeWidgetSupport } from "./nativeWidgets";
 import { DashboardChart } from "./DashboardChart";
 import { itemStyle } from "./ItemEditor";
 import {
@@ -84,7 +85,31 @@ function App() {
     [month, setMonth] = useState(new Date()),
     [period, setPeriod] = useState("Měsíc"),
     [invite, setInvite] = useState(""),
-    [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+    [editingEntry, setEditingEntry] = useState<Entry | null>(null),
+    [quickPreset, setQuickPreset] = useState<any>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get("action");
+    if (!data || !id) return;
+    let active = true;
+    api("/quick-actions")
+      .then((actions) => {
+        if (!active) return;
+        const a = actions.find((x: any) => x.id === id);
+        const item = data.items.find((i) => i.id === a?.itemId);
+        if (!a || !item) {
+          setError("Rychlá akce již není dostupná.");
+          return;
+        }
+        setQuickPreset(a);
+        setEditingEntry(null);
+        setForm(item.kind);
+        history.replaceState(null, "", location.pathname);
+      })
+      .catch((e) => setError(e.message));
+    return () => {
+      active = false;
+    };
+  }, [!!data]);
   const submitKey = useRef(crypto.randomUUID());
   useEffect(() => {
     if (!form) return;
@@ -410,6 +435,7 @@ function App() {
                 className="income"
                 onClick={() => {
                   setEditingEntry(null);
+                  setQuickPreset(null);
                   setForm("INCOME");
                 }}
               >
@@ -419,6 +445,7 @@ function App() {
                 className="expense"
                 onClick={() => {
                   setEditingEntry(null);
+                  setQuickPreset(null);
                   setForm("EXPENSE");
                 }}
               >
@@ -673,7 +700,14 @@ function App() {
             <article>
               <h2>{data.user.username}</h2>
               <p>Role: {data.user.role}</p>
-              <button onClick={() => void act(() => api("/logout", {}))}>
+              <button
+                onClick={() =>
+                  void act(async () => {
+                    if (nativeWidgetSupport()) await nativeWidgets.disconnect();
+                    return api("/logout", {});
+                  })
+                }
+              >
                 Odhlásit
               </button>
               {data.user.role === "OWNER" && (
@@ -756,7 +790,7 @@ function App() {
                 Položka
                 <select
                   name="itemId"
-                  defaultValue={editingEntry?.item.id}
+                  defaultValue={editingEntry?.item.id || quickPreset?.itemId}
                   required
                   onChange={(e) => {
                     const item = data.items.find(
@@ -831,13 +865,15 @@ function App() {
                   defaultValue={
                     editingEntry
                       ? String(Number(editingEntry.amount) / 100)
-                      : Number(
-                          (
-                            data.items.find(
-                              (i) => i.kind === form && !(i as any).hidden,
-                            ) as any
-                          )?.defaultAmount || 0,
-                        ) / 100 || ""
+                      : quickPreset
+                        ? String(Number(quickPreset.amount) / 100)
+                        : Number(
+                            (
+                              data.items.find(
+                                (i) => i.kind === form && !(i as any).hidden,
+                              ) as any
+                            )?.defaultAmount || 0,
+                          ) / 100 || ""
                   }
                 />
               </label>
@@ -888,8 +924,26 @@ createRoot(document.getElementById("root")!).render(<App />);
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.register("/sw.js").catch(console.error);
 import { App as NativeApp } from "@capacitor/app";
-NativeApp.addListener("appUrlOpen", ({ url }) => {
+function openWidgetUrl(url: string) {
   const parsed = new URL(url);
-  if (parsed.protocol === "systematicmoney:" && parsed.hostname === "quick")
-    location.assign("/?quick=EXPENSE");
-});
+  if (parsed.protocol !== "systematicmoney:" || parsed.hostname !== "quick")
+    return;
+  const id = parsed.searchParams.get("action");
+  const target =
+    id && /^[a-f0-9-]{36}$/i.test(id)
+      ? "/?action=" + encodeURIComponent(id)
+      : "/?quick=EXPENSE";
+  if (location.pathname + location.search !== target) location.assign(target);
+}
+NativeApp.addListener("appUrlOpen", ({ url }) => openWidgetUrl(url));
+if (nativeWidgetSupport())
+  NativeApp.getLaunchUrl().then((result) => {
+    if (result?.url && sessionStorage.getItem("widget-launch") !== result.url) {
+      sessionStorage.setItem("widget-launch", result.url);
+      if (
+        !new URLSearchParams(location.search).has("action") &&
+        !new URLSearchParams(location.search).has("quick")
+      )
+        openWidgetUrl(result.url);
+    }
+  });

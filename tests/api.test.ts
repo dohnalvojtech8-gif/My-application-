@@ -235,3 +235,155 @@ suite(
   },
   30000,
 );
+suite(
+  "widgety: omezené oprávnění, izolace, idempotence a odvolání",
+  async () => {
+    const other = request.agent(app),
+      owner = request.agent(app);
+    const password = "test-password-12345";
+    await other
+      .post("/api/auth/login")
+      .set("Origin", origin)
+      .send({ username: "other", password })
+      .expect(200);
+    const ownerUser = await db.user.findFirst({ where: { role: "OWNER" } });
+    await owner
+      .post("/api/auth/login")
+      .set("Origin", origin)
+      .send({ username: ownerUser.username, password })
+      .expect(200);
+    const item = (
+      await other
+        .post("/api/items")
+        .set("Origin", origin)
+        .send({ name: "Widget káva", kind: "EXPENSE", color: "#123456" })
+    ).body;
+    const action = (
+      await other
+        .post("/api/quick-actions")
+        .set("Origin", origin)
+        .send({
+          name: "Káva",
+          itemId: item.id,
+          amount: "49.90",
+          mode: "DIRECT",
+          showBalance: true,
+        })
+        .expect(200)
+    ).body;
+    await owner
+      .post("/api/quick-actions")
+      .set("Origin", origin)
+      .send({ name: "Cizí", itemId: item.id, amount: "1", mode: "DIRECT" })
+      .expect(404);
+    await other
+      .post("/api/widget-devices")
+      .set("Origin", origin)
+      .send({ name: "Telefon", password: "bad", showBalance: true })
+      .expect(403);
+    const device = (
+      await other
+        .post("/api/widget-devices")
+        .set("Origin", origin)
+        .send({ name: "Telefon", password, showBalance: true })
+        .expect(200)
+    ).body;
+    const auth = "Bearer " + device.token;
+    expect(
+      (await db.widgetDevice.findUnique({ where: { id: device.id } }))
+        .tokenHash,
+    ).not.toBe(device.token);
+    await request(app).get("/api/widget/snapshot").expect(401);
+    await request(app).get("/api/data").set("Authorization", auth).expect(401);
+    const before = (
+      await request(app)
+        .get("/api/widget/snapshot")
+        .set("Authorization", auth)
+        .expect(200)
+    ).body;
+    expect(before.actions).toHaveLength(1);
+    const requestId = randomUUID();
+    const responses = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        request(app)
+          .post("/api/widget/actions/" + action.id)
+          .set("Authorization", auth)
+          .send({ requestId, amount: "99999" }),
+      ),
+    );
+    expect(responses.every((r) => r.status === 200)).toBe(true);
+    expect(new Set(responses.map((r) => r.body.entryId)).size).toBe(1);
+    const after = (
+      await request(app).get("/api/widget/snapshot").set("Authorization", auth)
+    ).body;
+    expect(BigInt(after.balance)).toBe(BigInt(before.balance) - 4990n);
+    await request(app)
+      .post("/api/widget/actions/" + action.id)
+      .set("Authorization", auth)
+      .send({ requestId: "invalid" })
+      .expect(400);
+    const form = (
+      await other
+        .post("/api/quick-actions")
+        .set("Origin", origin)
+        .send({ name: "Formulář", itemId: item.id, amount: "10", mode: "FORM" })
+    ).body;
+    await request(app)
+      .post("/api/widget/actions/" + form.id)
+      .set("Authorization", auth)
+      .send({ requestId: randomUUID() })
+      .expect(404);
+    const privateDevice = (
+      await other
+        .post("/api/widget-devices")
+        .set("Origin", origin)
+        .send({ name: "Soukromý", password, showBalance: false })
+    ).body;
+    expect(
+      (
+        await request(app)
+          .get("/api/widget/snapshot")
+          .set("Authorization", "Bearer " + privateDevice.token)
+      ).body.balance,
+    ).toBeNull();
+    const foreignDevice = (
+      await owner
+        .post("/api/widget-devices")
+        .set("Origin", origin)
+        .send({ name: "Owner", password, showBalance: false })
+    ).body;
+    await request(app)
+      .post("/api/widget/actions/" + action.id)
+      .set("Authorization", "Bearer " + foreignDevice.token)
+      .send({ requestId: randomUUID() })
+      .expect(404);
+    await other
+      .delete("/api/widget-devices/" + device.id)
+      .set("Origin", origin)
+      .expect(200);
+    await request(app)
+      .get("/api/widget/snapshot")
+      .set("Authorization", auth)
+      .expect(401);
+    await db.widgetDevice.update({
+      where: { id: privateDevice.id },
+      data: { expiresAt: new Date(0) },
+    });
+    await request(app)
+      .get("/api/widget/snapshot")
+      .set("Authorization", "Bearer " + privateDevice.token)
+      .expect(401);
+    const loggedOut = (
+      await other
+        .post("/api/widget-devices")
+        .set("Origin", origin)
+        .send({ name: "Odhlášení", password, showBalance: false })
+    ).body;
+    await other.post("/api/logout").set("Origin", origin).send({}).expect(200);
+    await request(app)
+      .get("/api/widget/snapshot")
+      .set("Authorization", "Bearer " + loggedOut.token)
+      .expect(401);
+  },
+  30000,
+);

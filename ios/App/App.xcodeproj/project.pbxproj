@@ -18,6 +18,9 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		02BEAD1B05A24537872BBCFD /* MoneyWidget.appex in Copy Files */ = {isa = PBXBuildFile; fileRef = F6DAC2C617C444BD8AD25F87 /* MoneyWidget.appex */; };
 		993F135BB4E6411BBF189131 /* MoneyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFBBF0DD8C54BE0B839EC58 /* MoneyWidget.swift */; };
+		A7E893B35CEC4488A8306346 /* WidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E3316D635946ECBD709AB2 /* WidgetStore.swift */; };
+		40401FFAD7BD4745ACFDC5EB /* MoneyWidgetsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C57FBACD1504BC49BBAC4D5 /* MoneyWidgetsPlugin.swift */; };
+		CA309D2870474651AAB1F151 /* WidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E3316D635946ECBD709AB2 /* WidgetStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +37,8 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		F6DAC2C617C444BD8AD25F87 /* MoneyWidget.appex */ = {isa = PBXFileReference; name = "MoneyWidget.appex"; path = "MoneyWidget.appex"; sourceTree = BUILT_PRODUCTS_DIR; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; };
 		7EFBBF0DD8C54BE0B839EC58 /* MoneyWidget.swift */ = {isa = PBXFileReference; name = "MoneyWidget.swift"; path = "MoneyWidget/MoneyWidget.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; includeInIndex = 0; };
+		C2E3316D635946ECBD709AB2 /* WidgetStore.swift */ = {isa = PBXFileReference; name = "WidgetStore.swift"; path = "WidgetShared/WidgetStore.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; includeInIndex = 0; };
+		7C57FBACD1504BC49BBAC4D5 /* MoneyWidgetsPlugin.swift */ = {isa = PBXFileReference; name = "MoneyWidgetsPlugin.swift"; path = "App/MoneyWidgetsPlugin.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,6 +66,8 @@
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
+				CA9690BB8D824F18BA75F60A /* Plugins */,
+				7EFBBF0DD8C54BE0B839EC58 /* MoneyWidget.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -87,6 +94,15 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		CA9690BB8D824F18BA75F60A /* Plugins */ = {
+			isa = PBXGroup;
+			children = (
+				C2E3316D635946ECBD709AB2 /* WidgetStore.swift */,
+				7C57FBACD1504BC49BBAC4D5 /* MoneyWidgetsPlugin.swift */,
+			);
+			name = Plugins;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -198,6 +214,8 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
+				A7E893B35CEC4488A8306346 /* WidgetStore.swift in Sources */,
+				40401FFAD7BD4745ACFDC5EB /* MoneyWidgetsPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -206,6 +224,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				993F135BB4E6411BBF189131 /* MoneyWidget.swift in Sources */,
+				CA309D2870474651AAB1F151 /* WidgetStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -360,6 +379,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 			};
 			name = Debug;
 		};
@@ -381,6 +401,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 			};
 			name = Release;
 		};
@@ -402,6 +423,7 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = MoneyWidget/MoneyWidget.entitlements;
 			};
 		};
 		3F1599681DE24FE4914F8A6B /* Release */ = {
@@ -418,6 +440,7 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = MoneyWidget/MoneyWidget.entitlements;
 			};
 		};
 /* End XCBuildConfiguration section */
