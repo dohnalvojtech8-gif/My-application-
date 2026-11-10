@@ -44,6 +44,22 @@ export function WidgetSettings({ items }: { items: any[] }) {
       </summary>
       <article>
         <p role="status">{message}</p>
+        {!nativeWidgetSupport() && (
+          <aside className="editor-help" aria-label="Jak získat widgety">
+            <h3>Proč widgety ještě nevidíte v telefonu?</h3>
+            <p>
+              Právě používáte webovou verzi. Systémové widgety se objeví až
+              po instalaci mobilní aplikace SYSTEMATIC MONEY: na iPhonu přes
+              TestFlight nebo App Store, na Androidu z APK nebo Google Play.
+              Přidání webu na plochu widgety nenainstaluje.
+            </p>
+            <p>
+              Po instalaci aplikaci otevřete a přihlaste se. Na iPhonu potom
+              podržte zamčenou obrazovku → Přizpůsobit → Přidat widgety →
+              SYSTEMATIC MONEY. Panel 5 + 5 přidejte na domovskou obrazovku.
+            </p>
+          </aside>
+        )}
         <p>
           Každý widget může používat vlastní položku a částku. Režim „Formulář“
           otevře předvyplněnou platbu; „Přímé uložení“ ji uloží po systémovém

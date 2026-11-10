@@ -76,6 +76,8 @@ V Nastavení → Widgety a rychlé akce lze připravit vlastní položky a čás
 
 [Srovnání funkcí se Spendee a návrhy dalšího rozvoje](FEATURE_COMPARISON.md).
 
+[Instalovatelná aplikace bez vlastního Macu: TestFlight, podpisy a Google Play](DISTRIBUTION.md). Workflow pro vydání jsou připravené; žádná aplikace zatím nebyla zveřejněna v obchodech ani dodána do TestFlight.
+
 ## Bankovní účty a Revolut
 
 Nastavení obsahuje připojení účtů přes Enable Banking, živý katalog dostupných bank podle země a typu účtu, bankovní zůstatky, pravidelnou synchronizaci, kontrolovaný import a párování transakcí. Provoz vyžaduje vlastní aktivovaný přístup poskytovatele; živé propojení nebylo při vývoji ověřeno. Rozsah bank, omezení měn, aktivace na Renderu a bezpečnost jsou v [BANKING.md](BANKING.md).

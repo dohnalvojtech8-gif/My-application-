@@ -54,3 +54,10 @@ Tento soubor záměrně rozlišuje implementaci, ověření a zbývající čás
 - Bankovní zůstatky zůstávají v původní měně, evidence je nadále CZK. Nejde o záruku podpory všech bank a produktů ani o automatické bankovní účtování bez kontroly uživatele.
 - Testy používají skutečnou PostgreSQL a testovací odpovědi poskytovatele. Živý ani poskytovatelův sandbox účet nebyl připojen; aktivaci a vlastní klíče musí zajistit provozovatel podle [BANKING.md](BANKING.md).
 - Automatický worker potřebuje stejné bankovní klíče jako web. Sestavení nativních aplikací nezajišťuje jejich podpis ani instalaci na uživatelův telefon.
+
+## Instalace a distribuce
+
+- Přidán postup bez vlastního Macu: ručně spouštěný GitHub workflow pro podepsaný iOS archiv/IPA a volitelný upload do TestFlight, samostatné profily pro app i widget, dočasné uložení a úklid podpisových klíčů.
+- Android release workflow připravuje podepsanou APK a AAB z vlastního upload key. Bez nastavení klíčů se distribuční build nespouští.
+- Webové nastavení výslovně vysvětluje, proč PWA widgety nezobrazuje a kde se po instalaci nativní aplikace přidávají.
+- Podepsané release workflow a upload nejsou ověřené s účtem vydavatele. Apple Developer/Play Console účet, fyzické testy a veřejné vydání zbývají. Přesný návod je v [DISTRIBUTION.md](DISTRIBUTION.md).

@@ -1,7 +1,10 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
-  use: { baseURL: "http://localhost:3000" },
+  // These scenarios share one seeded financial account and mutate its balance/items.
+  // Concurrent scenarios would change each other's selected items and assertions.
+  workers: 1,
+  use: { baseURL: "http://localhost:3000", trace: "retain-on-failure" },
   webServer: {
     command: "npm start",
     url: "http://localhost:3000",

@@ -1,0 +1,84 @@
+name: iOS TestFlight
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version visible to testers (for example 1.0.0)
+        required: true
+        default: '1.0.0'
+      build_number:
+        description: New positive build number; increase for every upload
+        required: true
+      upload:
+        description: Upload to App Store Connect for TestFlight
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: ios-distribution
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 45
+    environment: app-store
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_BUILD: ${{ inputs.build_number }}
+      MOBILE_SERVER_URL: ${{ vars.MOBILE_SERVER_URL || 'https://my-application-99m3.onrender.com' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync ios
+      - name: Install distribution identity and validate both profiles
+        run: python3 scripts/ios-signing.py prepare
+        env:
+          IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+          IOS_DISTRIBUTION_P12: ${{ secrets.IOS_DISTRIBUTION_P12 }}
+          IOS_DISTRIBUTION_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_PASSWORD }}
+          IOS_APP_PROFILE: ${{ secrets.IOS_APP_PROFILE }}
+          IOS_WIDGET_PROFILE: ${{ secrets.IOS_WIDGET_PROFILE }}
+          UPLOAD_TESTFLIGHT: ${{ inputs.upload }}
+          ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+      - name: Assign a separate profile to the app and widget
+        run: node scripts/ios-release-project.mjs
+      - name: Archive signed app with embedded widget
+        run: >-
+          xcodebuild -project ios/App/App.xcodeproj -scheme App
+          -configuration Release -destination 'generic/platform=iOS'
+          -archivePath "$RUNNER_TEMP/systematic-money.xcarchive"
+          CURRENT_PROJECT_VERSION="$RELEASE_BUILD" MARKETING_VERSION="$RELEASE_VERSION"
+          archive
+      - name: Export signed IPA
+        run: >-
+          xcodebuild -exportArchive
+          -archivePath "$RUNNER_TEMP/systematic-money.xcarchive"
+          -exportOptionsPlist "$RUNNER_TEMP/money-signing/ExportOptions.plist"
+          -exportPath "$RUNNER_TEMP/money-ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: systematic-money-ios-${{ inputs.build_number }}
+          path: ${{ runner.temp }}/money-ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload to TestFlight processing
+        if: inputs.upload
+        env:
+          ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
+        run: |
+          ipa_files=("$RUNNER_TEMP/money-ipa/"*.ipa)
+          test "${#ipa_files[@]}" -eq 1
+          xcrun altool --upload-app --type ios --file "${ipa_files[0]}" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+      - name: Remove signing material
+        if: always()
+        run: python3 scripts/ios-signing.py cleanup

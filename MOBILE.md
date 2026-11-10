@@ -2,6 +2,8 @@
 
 SYSTEMATIC MONEY obsahuje projekty `android/` a `ios/App/App.xcodeproj` s nativními widgety. Stav skutečně provedených testů je v [STATUS.md](STATUS.md). PWA systémové widgety neposkytuje.
 
+**Nemáte Mac a chcete aplikaci do telefonu?** Postup přes GitHub, TestFlight a podepsané Android APK/AAB je v [DISTRIBUTION.md](DISTRIBUTION.md). iPhone build zatím nebyl podepsán ani vydán testerům; vyžaduje Apple Developer účet a vlastní podpisové přístupy.
+
 ## Společný backend
 
 Nejdříve nasaďte aktuální větev main na Render s PostgreSQL a proveďte migrace (`npm run migrate`, také automaticky v prestart). HTTPS origin musí odpovídat `APP_ORIGIN`. Mobilní aplikace používá stejný server, databázi a HTTP-only session jako web.
