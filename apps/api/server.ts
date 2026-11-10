@@ -1,3 +1,10 @@
+import {
+  installWallets,
+  walletFor,
+  lockLedger,
+  ledger,
+  FinanceError,
+} from "./wallets.js";
 import { installBanking } from "./banking/routes.js";
 import { widgetRouter, installWidgetSettings } from "./widgets.js";
 import { brandMap } from "./catalog.js";
@@ -91,7 +98,14 @@ app.post("/api/auth/register", async (q, r) => {
       await tx.bootstrap.create({ data: { id: 1 } });
       role = "OWNER";
     }
-    await tx.user.create({ data: { username: c.username, password, role } });
+    await tx.user.create({
+      data: {
+        username: c.username,
+        password,
+        role,
+        wallets: { create: { name: "Osobní účet", isDefault: true } },
+      },
+    });
   });
   r.status(201).json({ ok: true });
 });
@@ -145,30 +159,17 @@ app.post("/api/logout", async (q, r) => {
 });
 app.get("/api/data", async (_q, r) => {
   const u = r.locals.user;
-  const [items, entries] = await Promise.all([
-    db.item.findMany({
-      where: { userId: u.id, deletedAt: null },
-      orderBy: [{ favorite: "desc" }, { position: "asc" }, { name: "asc" }],
-    }),
-    db.entry.findMany({
-      where: { userId: u.id },
-      include: { item: true },
-      orderBy: { date: "desc" },
-    }),
-  ]);
+  const snapshot = await db.$transaction((tx) => ledger(tx, u.id), {
+    isolationLevel: "RepeatableRead",
+  });
   r.json({
+    ...snapshot,
     user: {
       username: u.username,
       role: u.role,
-      opening: u.opening,
+      opening: snapshot.opening,
       preferences: u.preferences,
     },
-    items,
-    entries: entries.map((e) => ({
-      ...e,
-      item: { ...e.item, ...((e.itemSnapshot as object) || {}) },
-    })),
-    balance: balance(u.opening, entries),
   });
 });
 const itemSchema = z.object({
@@ -270,6 +271,7 @@ app.delete("/api/items/:id", async (q, r) => {
   r.json({ ok: true });
 });
 const entrySchema = z.object({
+  walletId: z.string().uuid().optional(),
   itemId: z.string().uuid(),
   amount: z.string().refine((v) => {
     try {
@@ -290,16 +292,21 @@ app.post("/api/entries", async (q, r) => {
   });
   if (!item) return r.status(404).json({ error: "Položka neexistuje" });
   r.json(
-    await db.entry.upsert({
-      where: { userId_key: { userId, key: v.key } },
-      create: {
-        ...v,
-        userId,
-        itemSnapshot: { name: item.name, kind: item.kind, color: item.color },
-        amount: cents(v.amount),
-        status: v.date > today() ? "PLANNED" : "DONE",
-      },
-      update: {},
+    await db.$transaction(async (tx) => {
+      await lockLedger(tx, userId);
+      const wallet = await walletFor(tx, userId, v.walletId);
+      return tx.entry.upsert({
+        where: { userId_key: { userId, key: v.key } },
+        create: {
+          ...v,
+          userId,
+          walletId: wallet.id,
+          itemSnapshot: { name: item.name, kind: item.kind, color: item.color },
+          amount: cents(v.amount),
+          status: v.date > today() ? "PLANNED" : "DONE",
+        },
+        update: {},
+      });
     }),
   );
 });
@@ -329,9 +336,17 @@ app.delete("/api/entries/:id", async (q, r) => {
 });
 app.put("/api/settings", async (q, r) => {
   const opening = z.string().parse(q.body.opening);
-  await db.user.update({
-    where: { id: r.locals.user.id },
-    data: { opening: signedCents(opening) },
+  await db.$transaction(async (tx) => {
+    await lockLedger(tx, r.locals.user.id);
+    const w = await walletFor(tx, r.locals.user.id);
+    await tx.wallet.update({
+      where: { id: w.id },
+      data: { opening: signedCents(opening) },
+    });
+    await tx.user.update({
+      where: { id: r.locals.user.id },
+      data: { opening: signedCents(opening) },
+    });
   });
   r.json({ ok: true });
 });
@@ -344,22 +359,36 @@ app.patch("/api/entries/:id", async (q, r) => {
   const item = await db.item.findFirst({ where: { id: v.itemId, userId } });
   if (!old || !item) return r.status(404).json({ error: "Nenalezeno" });
   r.json(
-    await db.entry.updateMany({
-      where: { id: old.id, userId },
-      data: {
-        ...v,
-        itemSnapshot:
-          old.itemId === v.itemId
-            ? (old.itemSnapshot ?? {
-                name: item.name,
-                kind: item.kind,
-                color: item.color,
-              })
-            : { name: item.name, kind: item.kind, color: item.color },
-        amount: cents(v.amount),
-        status:
-          old.status === "PLANNED" || v.date > today() ? "PLANNED" : "DONE",
-      },
+    await db.$transaction(async (tx) => {
+      await lockLedger(tx, userId);
+      const w = await walletFor(
+        tx,
+        userId,
+        v.walletId || old.walletId,
+        !v.walletId || v.walletId === old.walletId,
+      );
+      return tx.entry.updateMany({
+        where: { id: old.id, userId },
+        data: {
+          ...v,
+          walletId: w.id,
+          itemSnapshot:
+            old.itemId === v.itemId
+              ? (old.itemSnapshot ?? {
+                  name: item.name,
+                  kind: item.kind,
+                  color: item.color,
+                })
+              : { name: item.name, kind: item.kind, color: item.color },
+          amount: cents(v.amount),
+          status:
+            old.status === "SKIPPED"
+              ? "SKIPPED"
+              : old.status === "PLANNED" || v.date > today()
+                ? "PLANNED"
+                : "DONE",
+        },
+      });
     }),
   );
 });
@@ -399,6 +428,7 @@ app.get("/api/events", async (_q, r) =>
     }),
   ),
 );
+installWallets(app, db);
 installBanking(app, db);
 installWidgetSettings(app, db);
 installExtended(app, db);
@@ -417,6 +447,8 @@ app.use(
     const code =
       typeof err === "object" && err && "code" in err ? String(err.code) : "";
     console.error({ error: err instanceof Error ? err.name : "Error", code });
+    if (err instanceof FinanceError)
+      return r.status(err.status).json({ error: err.message });
     if (err instanceof z.ZodError)
       return r
         .status(400)

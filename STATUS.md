@@ -3,9 +3,10 @@
 ## Ověřeno
 
 - Produkční build Vite, TypeScript, generování Prisma klienta a migrace na PostgreSQL 16.
-- 10 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování.
+- 14 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování, procenta, přestupný rok, porovnání stejně dlouhých období, účtování převodů a projekce opakování.
 - Integrační scénář: souběžná první registrace, jediný OWNER, uzavření registrace, jednorázová pozvánka, přihlášení, zákaz běžné administrace pro USER, kontrola Origin, izolace OWNER/USER, vytvoření/úprava/smazání/potvrzení, idempotence, opakování bez duplicit, zachování přeskočených výskytů, zákaz cizího uploadu a neplatného obrazového formátu, obnova s novými ID, zákaz obnovy do neprázdného účtu, blokování sessions.
-- 18 Chromium/Playwright testů: přihlášení, dashboard, nastavení a analytika při 1440×900 a 390×844; kontrola vodorovného přetečení.
+- Celkem 5 integračních scénářů včetně bank, widgetů, více účtů a migrace původní evidence. Nové kontroly ověřují cizí účty, souběžné převody bez duplicit, archivaci, cílový účet widgetu, obnovu včetně sérií a neměnný celkový zůstatek při převodu.
+- 22 Chromium/Playwright testů: přihlášení, dashboard, nastavení, editor, banky, widgety a analytika při 1440×900 a 390×844; procenta, filtry, převody, společný výběr účtu a kontrola vodorovného přetečení.
 - Render YAML vyhovuje veřejnému schématu draft 2020-12.
 
 ## Implementováno, vyžaduje provozní ověření
@@ -19,13 +20,23 @@
 
 - Widgety jsou implementované pro formulář i přímý zápis předvolených příjmů/výdajů a volitelný zůstatek. Jednotlivé přímé akce na zamčené obrazovce iOS používají systémové ověření; velký panel 5 + 5 se nabízí na ploše. Viz [MOBILE.md](MOBILE.md) pro nastavení a platformní omezení.
 - Mobilní push používá webovou cestu tam, kde ji systém podporuje; samostatné nativní APNs/FCM doručování není implementované.
-- Bez tematických presetů a změny měny (aktuálně CZK), individuálních upozornění na jednotlivé série, úplného auditu systémových událostí a více peněženek.
-- Uživatelská obnova nepřenáší série ani preference; kompletní provozní obnova je přes PostgreSQL.
+- Bez tematických presetů a změny měny (aktuálně CZK), individuálních upozornění na jednotlivé série a úplného auditu systémových událostí.
+- Uživatelská obnova verze 2 přenáší i účty, převody a série. Nepřenáší kompletní vzhled položek, preference, widgetové předvolby ani externí přístupy; kompletní provozní obnova je přes PostgreSQL.
 - PDF je export přes tisk prohlížeče. Editace částky/data/komentáře platby používá formulář aplikace.
 - Notifikace jsou při síťové chybě doručení zaznamenány v centru; automatický retry fronty push není implementovaný.
 - Pokročilé grafy denního panelu, editace typu položky a rozsáhlé E2E pokrytí všech editorů ještě chybí.
 
 Tento soubor záměrně rozlišuje implementaci, ověření a zbývající části. Celé původní zadání nelze označit za kompletně dokončené.
+
+## Přehledy a více účtů (10. 11. 2026)
+
+- Pět záložek přehledů, barevné příjmy/výdaje, procentní podíly, míra úspor, vývoj zůstatku, porovnání období, TOP položky a podrobné filtrování transakcí s CSV/PDF.
+- Trvalé platby: aktivní/pozastavené série, plán na příštích 30 dní, čekající platby po splatnosti a přechod do úpravy série. Projekce nepotvrzuje ani nevytváří skutečné platby.
+- Více vlastních účtů v CZK, vlastní barvy a počáteční zůstatky, archivace a převody mezi účty. Převod mění pouze zůstatky dotčených účtů, nikoli celkové příjmy či výdaje.
+- Výběr účtu propojuje dashboard, kalendář a statistiky. Série, widgetové předvolby a bankovní importy mají cílový účet.
+- Mazání položek a transakcí až z jejich detailu s potvrzením. Uskutečnění plánované platby má formulář pro skutečné datum.
+- Migrace zachovává původní zůstatek a historii v osobním účtu. Ověřena na databázi s původním schématem a vloženou starší evidencí; obnova verze 2 otestována s více účty i opakováním.
+- Lokálně prošlo 19 Vitest a 22 Playwright testů; finální výsledek každého odeslaného commitu je v GitHub Actions. Uživatelský návod: [REPORTS.md](REPORTS.md).
 
 ## Aktualizace vizuálního editoru (10. 11. 2026)
 

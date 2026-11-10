@@ -1,9 +1,16 @@
+import { WalletSelect } from "./Wallets";
 import { WidgetPanelSettings } from "./WidgetPanelSettings";
 import { useEffect, useState } from "react";
 import { Smartphone, Plus, Trash2, RefreshCw, ShieldCheck } from "lucide-react";
 import { call } from "./Settings";
 import { nativeWidgets, nativeWidgetSupport } from "./nativeWidgets";
-export function WidgetSettings({ items }: { items: any[] }) {
+export function WidgetSettings({
+  items,
+  wallets,
+}: {
+  items: any[];
+  wallets: any[];
+}) {
   const [actions, setActions] = useState<any[]>([]),
     [devices, setDevices] = useState<any[]>([]),
     [message, setMessage] = useState(""),
@@ -48,8 +55,8 @@ export function WidgetSettings({ items }: { items: any[] }) {
           <aside className="editor-help" aria-label="Jak získat widgety">
             <h3>Proč widgety ještě nevidíte v telefonu?</h3>
             <p>
-              Právě používáte webovou verzi. Systémové widgety se objeví až
-              po instalaci mobilní aplikace SYSTEMATIC MONEY: na iPhonu přes
+              Právě používáte webovou verzi. Systémové widgety se objeví až po
+              instalaci mobilní aplikace SYSTEMATIC MONEY: na iPhonu přes
               TestFlight nebo App Store, na Androidu z APK nebo Google Play.
               Přidání webu na plochu widgety nenainstaluje.
             </p>
@@ -80,6 +87,7 @@ export function WidgetSettings({ items }: { items: any[] }) {
             });
           }}
         >
+          <WalletSelect wallets={wallets} />
           <label>
             Název rychlé akce
             <input

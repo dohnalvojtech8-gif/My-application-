@@ -1,3 +1,4 @@
+import { walletFor, lockLedger } from "../wallets.js";
 import type { Express, RequestHandler } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { randomBytes } from "node:crypto";
@@ -56,6 +57,7 @@ export function installBanking(
               name: true,
               ibanMasked: true,
               currency: true,
+              walletId: true,
               balances: true,
             },
           },
@@ -315,6 +317,24 @@ export function installBanking(
       r.json({ ok: true });
     }),
   );
+  app.patch(
+    "/api/bank-accounts/:id/wallet",
+    wrap(async (q, r) => {
+      const walletId = z.string().uuid().nullable().parse(q.body.walletId),
+        userId = r.locals.user.id;
+      await db.$transaction(async (tx) => {
+        await lockLedger(tx, userId);
+        if (walletId) await walletFor(tx, userId, walletId);
+        const changed = await tx.bankAccount.updateMany({
+          where: { id: String(q.params.id), userId },
+          data: { walletId },
+        });
+        if (!changed.count)
+          throw new BankError(404, "Bankovní účet neexistuje.");
+      });
+      r.json({ ok: true });
+    }),
+  );
   app.get(
     "/api/bank-transactions",
     wrap(async (q, r) => {
@@ -331,7 +351,9 @@ export function installBanking(
         orderBy: { id: "asc" },
         take: 51,
         ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-        include: { account: { select: { name: true, ibanMasked: true } } },
+        include: {
+          account: { select: { name: true, ibanMasked: true, walletId: true } },
+        },
       });
       r.json({
         rows: rows.slice(0, 50),
@@ -348,12 +370,14 @@ export function installBanking(
           itemId: z.string().uuid().optional(),
           entryId: z.string().uuid().optional(),
           czkAmount: z.string().optional(),
+          walletId: z.string().uuid().optional(),
           confirmUncertain: z.boolean().default(false),
         })
         .parse(q.body);
       const userId = r.locals.user.id,
         id = String(q.params.id);
       const result = await db.$transaction(async (tx) => {
+        await lockLedger(tx, userId);
         // Lock the row before reading it: parallel clicks cannot each create a ledger entry.
         await tx.$queryRaw`SELECT id FROM "BankTransaction" WHERE id = ${id} AND "userId" = ${userId} FOR UPDATE`;
         const t = await tx.bankTransaction.findFirst({ where: { id, userId } });
@@ -374,12 +398,26 @@ export function installBanking(
         const amount =
           t.currency === "CZK" ? cents(t.amount) : cents(v.czkAmount || "");
         if (amount <= 0n) throw new BankError(400, "Částka musí být kladná.");
+        const account = await tx.bankAccount.findFirstOrThrow({
+          where: { id: t.accountId, userId },
+        });
+        const w = await walletFor(
+          tx,
+          userId,
+          v.walletId || account.walletId || undefined,
+        );
         let entryId: string;
         if (v.action === "LINK") {
           if (!v.entryId)
             throw new BankError(400, "Vyberte existující platbu.");
           const entry = await tx.entry.findFirst({
-            where: { id: v.entryId, userId, status: "DONE", amount },
+            where: {
+              id: v.entryId,
+              userId,
+              walletId: w.id,
+              status: "DONE",
+              amount,
+            },
             include: { item: true },
           });
           if (!entry || entry.item.kind !== t.kind)
@@ -413,6 +451,7 @@ export function installBanking(
             await tx.entry.create({
               data: {
                 userId,
+                walletId: w.id,
                 itemId: item.id,
                 amount,
                 date: t.date,

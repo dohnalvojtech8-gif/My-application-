@@ -1,3 +1,4 @@
+import { walletFor, lockLedger } from "./wallets.js";
 import type { Express } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
@@ -17,6 +18,7 @@ const preferences = z.object({
   notifications: z.boolean().default(false),
 });
 const seriesSchema = z.object({
+  walletId: z.string().uuid().optional(),
   itemId: z.string().uuid(),
   amount: z.string().refine((v) => {
     try {
@@ -37,32 +39,45 @@ export async function generate(
   userId: string,
   horizon: string,
 ) {
-  const series = await db.series.findMany({ where: { userId, paused: false } });
-  for (const s of series) {
-    const item = await db.item.findFirst({
-      where: { id: s.itemId, userId, deletedAt: null },
-    });
-    if (!item) continue;
-    const rows = [];
-    for (let i = 0; i < (s.count ?? 10000); i++) {
-      const date = occurrence(s.start, s.frequency, s.interval, i);
-      if (date > horizon || (s.end && date > s.end)) break;
-      rows.push({
-        userId,
-        itemSnapshot: { name: item.name, kind: item.kind, color: item.color },
-        itemId: s.itemId,
-        amount: s.amount,
-        date,
-        status: "PLANNED",
-        comment: s.comment,
-        key: `series:${s.id}:${i}`,
-        seriesId: s.id,
-        occurrence: i,
+  await db.$transaction(
+    async (tx) => {
+      await lockLedger(tx, userId);
+      const series = await tx.series.findMany({
+        where: { userId, paused: false, wallet: { archived: false } },
       });
-    }
-    if (rows.length)
-      await db.entry.createMany({ data: rows, skipDuplicates: true });
-  }
+      for (const s of series) {
+        const item = await tx.item.findFirst({
+          where: { id: s.itemId, userId, deletedAt: null },
+        });
+        if (!item) continue;
+        const rows = [];
+        for (let i = 0; i < (s.count ?? 10000); i++) {
+          const date = occurrence(s.start, s.frequency, s.interval, i);
+          if (date > horizon || (s.end && date > s.end)) break;
+          rows.push({
+            userId,
+            walletId: s.walletId,
+            itemSnapshot: {
+              name: item.name,
+              kind: item.kind,
+              color: item.color,
+            },
+            itemId: s.itemId,
+            amount: s.amount,
+            date,
+            status: "PLANNED",
+            comment: s.comment,
+            key: `series:${s.id}:${i}`,
+            seriesId: s.id,
+            occurrence: i,
+          });
+        }
+        if (rows.length)
+          await tx.entry.createMany({ data: rows, skipDuplicates: true });
+      }
+    },
+    { timeout: 20000 },
+  );
 }
 export function installExtended(app: Express, db: PrismaClient) {
   app.put("/api/preferences", async (q, r) => {
@@ -119,8 +134,12 @@ export function installExtended(app: Express, db: PrismaClient) {
     )
       return r.status(404).json({ error: "Položka neexistuje" });
     r.json(
-      await db.series.create({
-        data: { ...v, userId, amount: cents(v.amount) },
+      await db.$transaction(async (tx) => {
+        await lockLedger(tx, userId);
+        const w = await walletFor(tx, userId, v.walletId);
+        return tx.series.create({
+          data: { ...v, userId, walletId: w.id, amount: cents(v.amount) },
+        });
       }),
     );
   });
@@ -135,10 +154,15 @@ export function installExtended(app: Express, db: PrismaClient) {
       !(await db.series.findFirst({ where: { id, userId } }))
     )
       return r.status(404).json({ error: "Nenalezeno" });
+    if (v.end && v.end < v.start)
+      return r.status(400).json({ error: "Konec předchází začátku" });
     await db.$transaction(async (tx) => {
+      await lockLedger(tx, userId);
+      const old = await tx.series.findFirstOrThrow({ where: { id, userId } });
+      const w = await walletFor(tx, userId, v.walletId || old.walletId);
       await tx.series.update({
         where: { id },
-        data: { ...v, amount: cents(v.amount) },
+        data: { ...v, walletId: w.id, amount: cents(v.amount) },
       });
       await tx.entry.deleteMany({
         where: { seriesId: id, userId, status: "PLANNED" },
@@ -149,9 +173,16 @@ export function installExtended(app: Express, db: PrismaClient) {
   app.patch("/api/series/:id", async (q, r) => {
     const paused = z.boolean().parse(q.body.paused);
     r.json(
-      await db.series.updateMany({
-        where: { id: String(q.params.id), userId: r.locals.user.id },
-        data: { paused },
+      await db.$transaction(async (tx) => {
+        await lockLedger(tx, r.locals.user.id);
+        const old = await tx.series.findFirstOrThrow({
+          where: { id: String(q.params.id), userId: r.locals.user.id },
+        });
+        if (!paused) await walletFor(tx, r.locals.user.id, old.walletId);
+        return tx.series.updateMany({
+          where: { id: old.id, userId: r.locals.user.id },
+          data: { paused },
+        });
       }),
     );
   });
@@ -231,22 +262,29 @@ export function installExtended(app: Express, db: PrismaClient) {
   });
   app.get("/api/backup", async (_q, r) => {
     const userId = r.locals.user.id;
-    const [items, entries, series] = await Promise.all([
-      db.item.findMany({ where: { userId } }),
-      db.entry.findMany({ where: { userId } }),
-      db.series.findMany({ where: { userId } }),
-    ]);
+    const [items, entries, series, wallets, transfers] = await db.$transaction(
+      [
+        db.item.findMany({ where: { userId } }),
+        db.entry.findMany({ where: { userId } }),
+        db.series.findMany({ where: { userId } }),
+        db.wallet.findMany({ where: { userId } }),
+        db.transfer.findMany({ where: { userId } }),
+      ],
+      { isolationLevel: "RepeatableRead" },
+    );
     r.set(
       "Content-Disposition",
       'attachment; filename="systematic-money-backup.json"',
     ).json({
-      version: 1,
+      version: 2,
       exportedAt: new Date(),
       opening: r.locals.user.opening,
       preferences: r.locals.user.preferences,
       items,
       entries,
       series,
+      wallets,
+      transfers,
     });
   });
 }

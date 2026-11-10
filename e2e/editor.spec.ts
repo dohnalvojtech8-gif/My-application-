@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 test("editor vytvoří značkovou položku, upraví vzhled, zduplikuje a smaže", async ({
   page,
 }, info) => {
@@ -67,8 +67,15 @@ test("editor vytvoří značkovou položku, upraví vzhled, zduplikuje a smaže"
     }),
   ).toBeVisible();
   for (const title of [name, name + " – kopie"]) {
+    await expect(
+      page.getByRole("button", { name: "Smazat " + title, exact: true }),
+    ).toHaveCount(0);
     await page
-      .getByRole("button", { name: "Smazat " + title, exact: true })
+      .getByRole("button", { name: "Upravit " + title, exact: true })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Odstranit položku", exact: true })
       .click();
     await page
       .getByRole("alertdialog")

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 test("první návštěva nabízí vytvoření vlastníka a po registraci přihlásí", async ({
   page,
 }) => {

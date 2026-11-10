@@ -16,6 +16,8 @@ model User {
  bankConnections BankConnection[]
  bankAccounts BankAccount[]
  bankTransactions BankTransaction[]
+ wallets Wallet[]
+ transfers Transfer[]
  widgetPanel Json @default("{}")
  quickActions QuickAction[]
  widgetDevices WidgetDevice[]
@@ -62,6 +64,8 @@ model Entry {
  id String @id @default(uuid())
  userId String
  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ walletId String
+ wallet Wallet @relation(fields:[walletId,userId],references:[id,userId],onDelete:NoAction)
  itemId String
  item Item @relation(fields: [itemId,userId], references: [id,userId])
  amount BigInt
@@ -74,12 +78,15 @@ model Entry {
  key String
  @@unique([userId,key])
  @@index([userId,date])
+ @@index([walletId,userId,date])
 }
 
 model Series {
  id String @id @default(uuid())
  userId String
  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ walletId String
+ wallet Wallet @relation(fields:[walletId,userId],references:[id,userId],onDelete:NoAction)
  itemId String
  amount BigInt
  start String
@@ -122,6 +129,8 @@ model QuickAction {
  id String @id @default(uuid())
  userId String
  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ walletId String
+ wallet Wallet @relation(fields:[walletId,userId],references:[id,userId],onDelete:NoAction)
  itemId String
  name String
  amount BigInt
@@ -167,6 +176,8 @@ model BankAccount {
  id String @id @default(uuid())
  userId String
  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ walletId String?
+ wallet Wallet? @relation(fields:[walletId,userId],references:[id,userId],onDelete:NoAction)
  connectionId String
  connection BankConnection @relation(fields:[connectionId,userId],references:[id,userId],onDelete:Cascade)
  identity String
@@ -198,4 +209,43 @@ model BankTransaction {
  createdAt DateTime @default(now())
  @@unique([accountId,sourceKey])
  @@index([userId,state,date])
+}
+
+model Wallet {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ name String
+ kind String @default("BANK")
+ color String @default("#0d9488")
+ currency String @default("CZK")
+ opening BigInt @default(0)
+ isDefault Boolean @default(false)
+ archived Boolean @default(false)
+ createdAt DateTime @default(now())
+ entries Entry[]
+ series Series[]
+ quickActions QuickAction[]
+ bankAccounts BankAccount[]
+ outgoing Transfer[] @relation("TransferFrom")
+ incoming Transfer[] @relation("TransferTo")
+ @@unique([id,userId])
+ @@index([userId,archived])
+}
+model Transfer {
+ id String @id @default(uuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ fromId String
+ from Wallet @relation("TransferFrom",fields:[fromId,userId],references:[id,userId],onDelete:NoAction)
+ toId String
+ to Wallet @relation("TransferTo",fields:[toId,userId],references:[id,userId],onDelete:NoAction)
+ amount BigInt
+ date String
+ comment String @default("")
+ key String
+ @@unique([userId,key])
+ @@index([userId,date])
+ @@index([fromId,userId])
+ @@index([toId,userId])
 }

@@ -37,9 +37,10 @@ Samostatný šifrovací klíč vygenerujte lokálně příkazem `openssl rand -h
 
 - Načítají se zůstatky jednotlivých bankovních účtů a nejvýše posledních 90 dní **zaúčtovaných** transakcí. Skutečná historie závisí na bance a souhlasu. Rozpracované kartové blokace nejsou zaúčtovány.
 - Bankovní zůstatky se zobrazují odděleně v původní měně. Automaticky se nepřičítají k osobnímu zůstatku aplikace, aby se nesmíchaly historie a ruční zápisy.
+- Každému bankovnímu účtu lze přiřadit vlastní účet evidence vytvořený v Přehledy → Účty. Tento účet se předvybere pro import; u jednotlivé platby jej lze změnit. Bez přiřazení se použije výchozí osobní účet. Přiřazení nepřesouvá dřívější transakce a nepřebírá bankovní zůstatek jako počáteční.
 - Každou načtenou platbu lze **přidat do evidence**, **spárovat s již zadanou platbou** nebo **vynechat**. Vlastní převody lze vynechat, aby se nevydávaly za spotřebu či nový příjem. Automatické párování převodů není implementované.
 - Osobní evidence zatím pracuje v CZK. Pro bankovní platbu v jiné měně uživatel zadává korunovou hodnotu; automatické kurzy ani více měn v hlavním zůstatku nejsou hotové. Původní částka/měna zůstává v bankovní historii.
-- Při párování musí existující platba patřit témuž uživateli a mít stejnou korunovou částku, směr a uskutečněný stav. Jedna ruční platba nesmí být spárována dvakrát.
+- Při párování musí existující platba patřit témuž uživateli i zvolenému účtu evidence a mít stejnou korunovou částku, směr a uskutečněný stav. Jedna ruční platba nesmí být spárována dvakrát.
 - Identita účtu je stabilní přes obnovení souhlasu. Pro transakce se používá stálé `entry_reference`; dokumentace poskytovatele výslovně nedovoluje považovat `transaction_id` za stálé ID.
 - Když banka stálé ID neposkytne, stejné výskyty se uchovají jednotlivě a označí k ruční kontrole. Před importem je nutné potvrdit kontrolu duplicity. Nelze garantovat automatické rozlišení všech oprav bankovních dat bez stálého ID.
 - Smazání již importované platby v osobní evidenci nezpůsobí její tiché opětovné vytvoření při další synchronizaci. Bankovní historie zůstává označená jako zpracovaná.

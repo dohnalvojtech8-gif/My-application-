@@ -29,19 +29,20 @@ Stav zpracování: 10. listopadu 2026. Spendee je popsáno podle oficiální dok
 |---|---|---|
 | Web, PWA, iOS a Android | Společný backend, databáze a účet; nativní aplikace s Capacitor a vlastními widgety. | Web build, Android APK i iOS simulátorový build prošly. V obchodech nezveřejněno. |
 | Uživatelé a soukromí | OWNER, pozvánky, blokace, sessions; uživatelská data oddělena na serveru. | Integrační kontroly izolace; není to nezávislý bezpečnostní audit. |
-| Příjmy a výdaje | Vytvoření, úprava, smazání, počáteční zůstatek, přesné uložení v haléřích. | Výpočty a API pokryty testy. Jeden zůstatek, CZK. |
+| Příjmy a výdaje | Vytvoření, úprava, smazání až v detailu, počáteční zůstatek každého účtu, přesné uložení v haléřích. | Výpočty a API pokryty testy. Evidence v CZK. |
 | Skutečné versus plánované | Plánované platby se do zůstatku započtou až po potvrzení se skutečným datem. | Ověřeno integračně. |
 | Dashboard a kalendáře | Období, týdenní a měsíční kalendář, denní platby a součty. | Responzivní web testován ve dvou velikostech. Denní analytický panel má prostor pro rozšíření. |
-| Statistiky | Grafy, TOP 5/10, četnost, průměry, maxima, porovnání období, vyhledávání. | Implementováno; E2E ověřují základní průchody, nikoli všechny analytické kombinace. |
+| Statistiky | Barevné grafy s procenty, míra úspor, vývoj zůstatku, TOP 5/10, četnost, průměry, maxima, porovnání období, vlastní rozsah a kombinované filtry. | Výpočty jednotkově; E2E ověřují procenta, filtrování, detail a společný výběr účtu. Nikoli všechny kombinace filtrů. |
 | Editor položek | 3 470 brandových log, univerzální ikony, upload, HEX, gradienty, náhled, oblíbené, pořadí, duplikace a smazání. | Desktop/mobil E2E a testy zachování historie při smazání. |
-| Opakování | Den/týden/měsíc/rok, interval, konec/počet, pauza, přeskočení a změna výskytu. | Generování a vybrané kalendářní hraniční případy testovány. |
+| Opakování | Den/týden/měsíc/rok, interval, konec/počet, pauza, přeskočení, změna výskytu a cílový účet. Přehled sérií s projekcí na 30 dní a platbami po splatnosti. | Generování, přesunuté/přeskočené výskyty a vybrané kalendářní hraniční případy testovány. |
 | Widget Příjem/Výdaj | Otevře příslušný list bez zápisu; na iOS i v zamčených accessory slotech. | Oba webové cíle otestované; nativní ovládání na telefonu ještě ne. |
 | Přímá widgetová platba | Předvolená částka, systémové ověření, omezený token, ochrana proti opakovanému požadavku. | Backend a sestavení ověřeny. iOS může využít již odemčený stav; nejde o vynucení nového kódu pokaždé. |
 | Panel 5 výdajů + 5 příjmů | Deset pevných pozic, prázdné sloty, prohození řádků, nastavení z webu. | API/E2E ověřeny. iPhone: plocha; Android zámek: jen podporované systémy/výrobci. |
 | Upozornění | Centrum, Web Push a plánovací worker. | Skutečné doručení na telefon neověřeno; nativní APNs/FCM chybí. |
-| Export a obnova | Webový CSV, PDF přes tisk, JSON záloha položek/transakcí. | Obnova omezená na prázdný účet; kompletní obnovu serveru z PostgreSQL je třeba provozně nacvičit. |
+| Export a obnova | Filtrovaný CSV, PDF přes tisk, JSON záloha účtů, položek, transakcí, převodů a sérií. | Obnova do prázdného účtu testována; kompletní obnovu serveru z PostgreSQL je třeba provozně nacvičit. |
 | Banky | Integrace Enable Banking implementovaná; aktivace poskytovatele a test živých účtů zbývají. | Revolut/ostatní banky podle aktuálního katalogu, ne všechny produkty. Viz BANKING.md. |
-| Rozpočty a více peněženek v osobní evidenci | Zatím neimplementováno. | Bankovní účty jsou samostatný přehled, nenahrazují plnohodnotné vícepeněženkové účetnictví. |
+| Více účtů / peněženek | Vlastní bankovní, hotovostní, spořicí a ostatní účty; převody, archivace a cílový účet bankovního importu. | CZK, soukromé účty jednoho uživatele. Izolace, převody bez duplicit, migrace a obnova testovány. |
+| Rozpočty | Zatím neimplementováno. | Bez rozpočtových limitů a obálek. |
 | Další chybějící oblasti | AI účtenky, offline zápisy, společné peněženky, více měn, ucelený zámek celé aplikace. | Nejde o hotové funkce ani o slíbené datum dodání. |
 
 ## 3. Funkce a vlastnosti, které mohou dát výhodu
@@ -63,4 +64,4 @@ Ne všechny položky jsou novinkou proti Spendee. Dorovnání základů je nutn�
 | P2 · Přenositelnost | Průvodce importem ze Spendee, přehledné mapování kategorií a plná obnova/export z webu. | Jednodušší přechod a menší závislost na aplikaci. | Import/export zachová částky, měny, data, vazby a součty. |
 | P2 · Předplatná a cíle | Detekce zdražení, roční cena služeb, upozornění na obnovení, spořicí cíle. | Praktická doporučení založená na vlastních datech. | Doložit každý závěr konkrétními transakcemi; žádná neověřitelná tvrzení o úspoře. |
 
-Doporučené pořadí: dokončit a ověřit widgety na zařízeních → dotažení základního ovládání → rozpočty, peněženky a měny → bezpečný import/banky → projekce a další odlišení. Vydání do obchodů je samostatný krok s podpisy, soukromím, smazáním účtu a kontrolou Apple/Google; není nyní hotové.
+Doporučené pořadí: ověřit widgety na zařízeních → uživatelské ověření nových přehledů a účtů → rozpočty a měny → živé bankovní propojení → rozšířené projekce a další odlišení. Vydání do obchodů je samostatný krok s podpisy, soukromím, smazáním účtu a kontrolou Apple/Google; není nyní hotové.

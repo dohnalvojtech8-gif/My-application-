@@ -442,13 +442,6 @@ export function ItemEditor({
               >
                 <Copy size={16} />
               </button>
-              <button
-                className="danger-text"
-                aria-label={"Smazat " + i.name}
-                onClick={() => setDeleting(i)}
-              >
-                <Trash2 size={16} />
-              </button>
             </div>
           </div>
         ))}
@@ -974,6 +967,19 @@ export function ItemEditor({
               </aside>
             </div>
             <footer className="editor-footer">
+              {draft.id && (
+                <button
+                  className="danger-text"
+                  disabled={busy}
+                  onClick={() => {
+                    const item = draft;
+                    setDraft(null);
+                    setDeleting(item);
+                  }}
+                >
+                  <Trash2 size={16} /> Odstranit položku
+                </button>
+              )}
               <div role="alert">
                 {error || "Změny se projeví až po uložení."}
               </div>

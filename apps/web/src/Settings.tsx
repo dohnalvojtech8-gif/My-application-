@@ -1,3 +1,4 @@
+import { Wallets, WalletSelect } from "./Wallets";
 import { BankSettings } from "./BankSettings";
 import { WidgetSettings } from "./WidgetSettings";
 import { ItemEditor } from "./ItemEditor";
@@ -19,9 +20,11 @@ export async function call(
 export function Settings({
   data,
   refresh,
+  focusSeries = false,
 }: {
   data: any;
   refresh: () => unknown;
+  focusSeries?: boolean;
 }) {
   const [series, setSeries] = useState<any[]>([]),
     [seriesEditing, setSeriesEditing] = useState<any>(null),
@@ -56,7 +59,14 @@ export function Settings({
     <>
       <p role="status">{message}</p>
       <ItemEditor items={data.items} refresh={refresh} />
-      <WidgetSettings items={data.items} />
+      <details className="settings-group">
+        <summary>
+          <span>Finanční účty</span>
+          <small>Hotovost, bankovní účty, spoření a převody</small>
+        </summary>
+        <Wallets data={data} refresh={refresh} />
+      </details>
+      <WidgetSettings items={data.items} wallets={data.wallets || []} />
       <BankSettings data={data} refresh={refresh} />
       <details className="settings-group">
         <summary>
@@ -139,7 +149,7 @@ export function Settings({
           </button>
         </article>
       </details>
-      <details className="settings-group">
+      <details className="settings-group" open={focusSeries || undefined}>
         <summary>
           <span>Opakované platby</span>
           <small>Automatické plánování pravidelných příjmů a výdajů</small>
@@ -171,6 +181,11 @@ export function Settings({
               });
             }}
           >
+            <WalletSelect
+              wallets={data.wallets || []}
+              defaultValue={seriesEditing?.walletId}
+              include={seriesEditing?.walletId}
+            />
             <label>
               Položka
               <select
@@ -211,7 +226,11 @@ export function Settings({
             </label>
             <label>
               Frekvence
-              <select name="frequency" defaultValue={seriesEditing?.frequency}>
+              <select
+                aria-label="Frekvence"
+                name="frequency"
+                defaultValue={seriesEditing?.frequency}
+              >
                 <option value="DAILY">Denně</option>
                 <option value="WEEKLY">Týdně</option>
                 <option value="MONTHLY">Měsíčně</option>

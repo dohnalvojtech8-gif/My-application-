@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 test("rychlá akce widgetu otevře předvyplněný formulář bez automatického zaúčtování", async ({
   page,
 }, info) => {

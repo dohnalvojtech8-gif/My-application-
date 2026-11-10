@@ -1,3 +1,12 @@
+import {
+  money,
+  sum,
+  net,
+  today,
+  type FinancialEntry,
+  type FinancialWallet,
+} from "../../shared/finance";
+import { WalletSelect } from "./Wallets";
 import { BankReturn, captureBankReturn } from "./BankReturn";
 import { nativeWidgets, nativeWidgetSupport } from "./nativeWidgets";
 import { DashboardChart } from "./DashboardChart";
@@ -14,7 +23,6 @@ import {
   Minus,
   Pin,
 } from "lucide-react";
-import { Comparison } from "./Comparison";
 import { ItemIcon } from "./ItemIcon";
 import { Week } from "./Week";
 import { Analytics } from "./Analytics";
@@ -43,32 +51,28 @@ async function api(
   if (!r.ok) throw Object.assign(new Error(d.error), { status: r.status });
   return d;
 }
-const money = (n: string | number) =>
-  new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK" }).format(
-    Number(n) / 100,
-  );
 const day = (d = new Date()) =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Prague" }).format(d);
 type Item = { id: string; name: string; kind: string; color: string };
-type Entry = {
-  id: string;
-  amount: string;
-  date: string;
-  status: string;
-  comment: string;
-  item: Item;
-};
+type Entry = FinancialEntry;
 type Data = {
   user: { username: string; role: string; opening: string; preferences?: any };
   items: Item[];
   entries: Entry[];
   balance: string;
+  wallets: FinancialWallet[];
+  transfers: any[];
+  series: any[];
 };
 const pendingBankReturn = captureBankReturn();
 function App() {
   const [data, setData] = useState<Data | null>(null),
     [error, setError] = useState(""),
     [page, setPage] = useState(0),
+    [walletId, setWalletId] = useState("ALL"),
+    [focusSeries, setFocusSeries] = useState(false),
+    [deleteEntry, setDeleteEntry] = useState(false),
+    [confirmDate, setConfirmDate] = useState(day()),
     [menu, setMenu] = useState(false),
     [pinned, setPinned] = useState(false),
     [register, setRegister] = useState(false),
@@ -155,6 +159,8 @@ function App() {
   const submitKey = useRef(crypto.randomUUID());
   useEffect(() => {
     if (!form) return;
+    setDeleteEntry(false);
+    setConfirmDate(day());
     submitKey.current = crypto.randomUUID();
     const previous = document.activeElement as HTMLElement;
     const dialog = document.querySelector("[role=dialog]") as HTMLElement;
@@ -348,7 +354,18 @@ function App() {
         )}
       </main>
     );
-  const entries = data.entries.filter(
+  const wallets = data.wallets || [];
+  const selectedWallet = wallets.some((w) => w.id === walletId)
+    ? walletId
+    : "ALL";
+  const scopedEntries = data.entries.filter(
+    (e) => selectedWallet === "ALL" || e.walletId === selectedWallet,
+  );
+  const scopedBalance =
+    selectedWallet === "ALL"
+      ? data.balance
+      : wallets.find((w) => w.id === selectedWallet)!.balance;
+  const entries = scopedEntries.filter(
     (e) => e.date === date && e.status !== "SKIPPED",
   );
   const end = day();
@@ -357,13 +374,14 @@ function App() {
     start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
   if (period === "Měsíc") start.setDate(1);
   if (period === "Rok") start.setMonth(0, 1);
-  const filtered = data.entries.filter(
+  const filtered = scopedEntries.filter(
     (e) => period === "Vše" || (e.date >= day(start) && e.date <= end),
   );
   const total = (kind: string) =>
-    filtered
-      .filter((e) => e.status === "DONE" && e.item.kind === kind)
-      .reduce((a, e) => a + Number(e.amount), 0);
+    sum(
+      filtered.filter((e) => e.status === "DONE"),
+      kind,
+    );
   const cells = Array.from({ length: 42 }, (_, i) => {
     const d = new Date(month.getFullYear(), month.getMonth(), 1);
     d.setDate(1 - ((d.getDay() + 6) % 7) + i);
@@ -449,111 +467,104 @@ function App() {
           </span>
         </div>
         {page < 3 && (
+          <div className="account-scope">
+            <WalletCards size={21} />
+            <label>
+              Zobrazený finanční účet
+              <select
+                value={selectedWallet}
+                onChange={(e) => setWalletId(e.target.value)}
+              >
+                <option value="ALL">Všechny účty · společný přehled</option>
+                {wallets.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                    {w.archived ? " (archivovaný)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span>
+              {selectedWallet === "ALL"
+                ? wallets.length + " účtů"
+                : wallets.find((w) => w.id === selectedWallet)?.name}
+              <b>{money(scopedBalance)}</b>
+            </span>
+          </div>
+        )}
+        {page < 3 && (
           <>
-            <div className="period">
-              {["Den", "Týden", "Měsíc", "Rok", "Vše"].map((p) => (
-                <button
-                  className={period === p ? "selected" : ""}
-                  onClick={() => setPeriod(p)}
-                  key={p}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-            <div className="stats">
-              <article className="balance">
-                <small>Aktuální zůstatek</small>
-                <h2>{money(data.balance)}</h2>
-              </article>
-              <article className="income">
-                <small>Uskutečněné příjmy</small>
-                <h2>{money(total("INCOME"))}</h2>
-              </article>
-              <article className="expense">
-                <small>Uskutečněné výdaje</small>
-                <h2>{money(total("EXPENSE"))}</h2>
-              </article>
-            </div>
-            <div className="actions">
-              <button
-                className="income"
-                onClick={() => {
-                  setEditingEntry(null);
-                  setQuickPreset(null);
-                  setForm("INCOME");
-                }}
-              >
-                {<Plus size={21} />} PŘÍJEM
-              </button>
-              <button
-                className="expense"
-                onClick={() => {
-                  setEditingEntry(null);
-                  setQuickPreset(null);
-                  setForm("EXPENSE");
-                }}
-              >
-                {<Minus size={21} />} VÝDAJ
-              </button>
-            </div>
-            {page === 0 && <DashboardChart entries={data.entries} />}
-            {page === 2 ? (
+            {page < 2 && (
               <>
-                <Comparison entries={data.entries} period={period} />
-                <Analytics
-                  allEntries={data.entries}
-                  entries={filtered}
-                  opening={data.user.opening}
-                />
-                <article>
-                  <h2>Příjmy a výdaje</h2>
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart
-                      data={[
-                        { name: "Příjmy", částka: total("INCOME") / 100 },
-                        { name: "Výdaje", částka: total("EXPENSE") / 100 },
-                      ]}
+                <div className="period">
+                  {["Den", "Týden", "Měsíc", "Rok", "Vše"].map((p) => (
+                    <button
+                      className={period === p ? "selected" : ""}
+                      onClick={() => setPeriod(p)}
+                      key={p}
                     >
-                      <XAxis dataKey="name" />
-                      <Tooltip />
-                      <Bar dataKey="částka" fill="#00b9b4" radius={8} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <div className="stats">
+                  <article className="balance">
+                    <small>Aktuální zůstatek</small>
+                    <h2>{money(scopedBalance)}</h2>
+                  </article>
+                  <article className="income">
+                    <small>Uskutečněné příjmy</small>
+                    <h2>{money(total("INCOME"))}</h2>
+                  </article>
+                  <article className="expense">
+                    <small>Uskutečněné výdaje</small>
+                    <h2>{money(total("EXPENSE"))}</h2>
+                  </article>
+                </div>
+                <div className="actions">
                   <button
+                    className="income"
                     onClick={() => {
-                      const rows = [
-                        "Datum;Položka;Haléře;Stav",
-                        ...filtered.map((e) =>
-                          [
-                            e.date,
-                            '"' +
-                              e.item.name
-                                .replace(/"/g, '""')
-                                .replace(/^[=+@-]/, "'") +
-                              '"',
-                            e.amount,
-                            e.status,
-                          ].join(";"),
-                        ),
-                      ];
-                      const a = document.createElement("a");
-                      a.href = URL.createObjectURL(
-                        new Blob(["\ufeff" + rows.join("\n")], {
-                          type: "text/csv",
-                        }),
-                      );
-                      a.download = "systematic-money.csv";
-                      a.click();
-                      URL.revokeObjectURL(a.href);
+                      setEditingEntry(null);
+                      setQuickPreset(null);
+                      setForm("INCOME");
                     }}
                   >
-                    Export CSV
+                    {<Plus size={21} />} PŘÍJEM
                   </button>
-                </article>
+                  <button
+                    className="expense"
+                    onClick={() => {
+                      setEditingEntry(null);
+                      setQuickPreset(null);
+                      setForm("EXPENSE");
+                    }}
+                  >
+                    {<Minus size={21} />} VÝDAJ
+                  </button>
+                </div>
+                {page === 0 && <DashboardChart entries={scopedEntries} />}
               </>
+            )}
+            {page === 2 ? (
+              <Analytics
+                data={data}
+                period={period}
+                setPeriod={setPeriod}
+                walletId={selectedWallet}
+                refresh={refresh}
+                onEdit={(e) => {
+                  setEditingEntry(e);
+                  setQuickPreset(null);
+                  setForm(e.item.kind);
+                }}
+                onManageSeries={() => {
+                  setFocusSeries(true);
+                  setPage(3);
+                }}
+              />
             ) : page === 0 ? (
-              <Week date={date} onDate={setDate} entries={data.entries} />
+              <Week date={date} onDate={setDate} entries={scopedEntries} />
             ) : (
               <article>
                 <div className="month">
@@ -599,10 +610,10 @@ function App() {
                     >
                       {d.getDate()}
                       <div>
-                        {data.entries.some(
+                        {scopedEntries.some(
                           (e) => e.date === day(d) && e.item.kind === "INCOME",
                         ) && <i className="green" />}
-                        {data.entries.some(
+                        {scopedEntries.some(
                           (e) => e.date === day(d) && e.item.kind === "EXPENSE",
                         ) && <i className="red" />}
                       </div>
@@ -611,133 +622,123 @@ function App() {
                 </div>
               </article>
             )}
-            <article>
-              <h2>
-                Platby ·{" "}
-                {new Date(date + "T12:00:00").toLocaleDateString("cs-CZ", {
-                  day: "numeric",
-                  month: "long",
-                })}
-              </h2>
-              <div className="stats">
-                <div className="income">
-                  Příjmy{" "}
-                  {money(
-                    entries
-                      .filter(
-                        (e) => e.status === "DONE" && e.item.kind === "INCOME",
-                      )
-                      .reduce((n, e) => n + Number(e.amount), 0),
-                  )}
-                </div>
-                <div className="expense">
-                  Výdaje{" "}
-                  {money(
-                    entries
-                      .filter(
-                        (e) => e.status === "DONE" && e.item.kind === "EXPENSE",
-                      )
-                      .reduce((n, e) => n + Number(e.amount), 0),
-                  )}
-                </div>
-                <div>
-                  Rozdíl{" "}
-                  {money(
-                    entries
-                      .filter((e) => e.status === "DONE")
-                      .reduce(
-                        (n, e) =>
-                          n +
-                          Number(e.amount) *
-                            (e.item.kind === "INCOME" ? 1 : -1),
-                        0,
-                      ),
-                  )}
-                </div>
-              </div>
-              {entries.length === 0 && (
-                <p>Pro tento den zatím nemáte žádné platby.</p>
-              )}
-              {entries.map((e) => (
-                <div className="entry" key={e.id}>
-                  <span style={{ color: e.item.color }}>
-                    <ItemIcon item={e.item} />
-                  </span>
-                  <div>
-                    <strong>{e.item.name}</strong>
-                    <small>
-                      {e.status === "DONE" ? "Uskutečněno" : "Plánováno"} ·{" "}
-                      {e.comment}
-                    </small>
+            {page < 2 && (
+              <article>
+                <h2>
+                  Platby ·{" "}
+                  {new Date(date + "T12:00:00").toLocaleDateString("cs-CZ", {
+                    day: "numeric",
+                    month: "long",
+                  })}
+                </h2>
+                <div className="stats">
+                  <div className="income">
+                    Příjmy{" "}
+                    {money(
+                      entries
+                        .filter(
+                          (e) =>
+                            e.status === "DONE" && e.item.kind === "INCOME",
+                        )
+                        .reduce((n, e) => n + BigInt(e.amount), 0n),
+                    )}
                   </div>
-                  <b
-                    className={e.item.kind === "INCOME" ? "income" : "expense"}
-                  >
-                    {e.item.kind === "INCOME" ? "+" : "−"}
-                    {money(e.amount)}
-                  </b>
-                  {e.status === "PLANNED" && (
+                  <div className="expense">
+                    Výdaje{" "}
+                    {money(
+                      entries
+                        .filter(
+                          (e) =>
+                            e.status === "DONE" && e.item.kind === "EXPENSE",
+                        )
+                        .reduce((n, e) => n + BigInt(e.amount), 0n),
+                    )}
+                  </div>
+                  <div>
+                    Rozdíl{" "}
+                    {money(
+                      entries
+                        .filter((e) => e.status === "DONE")
+                        .reduce(
+                          (n, e) =>
+                            n +
+                            BigInt(e.amount) *
+                              (e.item.kind === "INCOME" ? 1n : -1n),
+                          0n,
+                        ),
+                    )}
+                  </div>
+                </div>
+                {entries.length === 0 && (
+                  <p>Pro tento den zatím nemáte žádné platby.</p>
+                )}
+                {entries.map((e) => (
+                  <div className="entry" key={e.id}>
+                    <span style={{ color: e.item.color }}>
+                      <ItemIcon item={e.item} />
+                    </span>
+                    <div>
+                      <strong>{e.item.name}</strong>
+                      <small>
+                        {e.status === "DONE" ? "Uskutečněno" : "Plánováno"} ·{" "}
+                        {e.comment} ·{" "}
+                        {wallets.find((w) => w.id === e.walletId)?.name}
+                      </small>
+                    </div>
+                    <b
+                      className={
+                        e.item.kind === "INCOME" ? "income" : "expense"
+                      }
+                    >
+                      {e.item.kind === "INCOME" ? "+" : "−"}
+                      {money(e.amount)}
+                    </b>
                     <button
                       onClick={() => {
-                        const d = prompt(
-                          "Skutečné datum realizace (YYYY-MM-DD)",
-                          day(),
-                        );
-                        if (d)
-                          void act(() =>
-                            api("/entries/" + e.id + "/confirm", { date: d }),
-                          );
+                        setEditingEntry(e);
+                        setForm(e.item.kind);
                       }}
                     >
-                      Potvrdit
+                      Detail
                     </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setEditingEntry(e);
-                      setForm(e.item.kind);
-                    }}
-                  >
-                    Upravit
-                  </button>
-                  <button
-                    aria-label="Smazat platbu"
-                    onClick={() => {
-                      if (confirm("Smazat tuto platbu?"))
-                        void act(() =>
-                          api("/entries/" + e.id, undefined, "DELETE"),
-                        );
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </article>
+                  </div>
+                ))}
+                {(data.transfers || [])
+                  .filter(
+                    (t) =>
+                      t.date === date &&
+                      (selectedWallet === "ALL" ||
+                        t.fromId === selectedWallet ||
+                        t.toId === selectedWallet),
+                  )
+                  .map((t) => (
+                    <div className="entry transfer-calendar" key={t.id}>
+                      <span>⇄</span>
+                      <div>
+                        <strong>
+                          {wallets.find((w) => w.id === t.fromId)?.name} →{" "}
+                          {wallets.find((w) => w.id === t.toId)?.name}
+                        </strong>
+                        <small>
+                          Převod mezi vlastními účty · mimo příjmy a výdaje
+                        </small>
+                      </div>
+                      <b>{money(t.amount)}</b>
+                    </div>
+                  ))}
+              </article>
+            )}
           </>
         )}
         {page === 3 && (
           <>
-            <Settings data={data} refresh={refresh} />
+            <Settings data={data} refresh={refresh} focusSeries={focusSeries} />
             <Notifications
               onDate={(d) => {
                 setDate(d);
                 setPage(1);
               }}
             />
-            <article>
-              <h2>Počáteční zůstatek</h2>
-              <form
-                onSubmit={(e) => submit(e, (v) => api("/settings", v, "PUT"))}
-              >
-                <input
-                  aria-label="Počáteční zůstatek"
-                  name="opening"
-                  defaultValue={Number(data.user.opening) / 100}
-                />
-                <button>Uložit</button>
-              </form>
-            </article>
           </>
         )}
         {page === 4 && (
@@ -822,6 +823,15 @@ function App() {
                 })
               }
             >
+              <WalletSelect
+                wallets={wallets}
+                defaultValue={
+                  editingEntry?.walletId ||
+                  quickPreset?.walletId ||
+                  (selectedWallet === "ALL" ? undefined : selectedWallet)
+                }
+                include={editingEntry?.walletId}
+              />
               <label>
                 Datum
                 <input
@@ -958,6 +968,70 @@ function App() {
                 Uložit
               </button>
             </form>
+            {editingEntry?.status === "PLANNED" && (
+              <div className="payment-confirm">
+                <h3>Potvrdit uskutečnění</h3>
+                <label>
+                  Skutečné datum realizace
+                  <input
+                    type="date"
+                    value={confirmDate}
+                    max={day()}
+                    onChange={(e) => setConfirmDate(e.target.value)}
+                  />
+                </label>
+                <button
+                  onClick={() =>
+                    void act(async () => {
+                      await api("/entries/" + editingEntry.id + "/confirm", {
+                        date: confirmDate,
+                      });
+                      setForm("");
+                    })
+                  }
+                >
+                  Potvrdit platbu
+                </button>
+              </div>
+            )}
+            {editingEntry && (
+              <div className="payment-delete">
+                {deleteEntry ? (
+                  <>
+                    <p role="alert">
+                      {editingEntry.seriesId
+                        ? "Tento výskyt bude přeskočen. Ostatní opakování zůstanou."
+                        : "Opravdu odstranit tuto platbu? Její částka se odebere ze součtů."}
+                    </p>
+                    <button onClick={() => setDeleteEntry(false)}>
+                      Ponechat platbu
+                    </button>
+                    <button
+                      className="danger"
+                      onClick={() =>
+                        void act(async () => {
+                          await api(
+                            "/entries/" + editingEntry.id,
+                            undefined,
+                            "DELETE",
+                          );
+                          setForm("");
+                        })
+                      }
+                    >
+                      Potvrdit odstranění platby
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="danger-text"
+                    onClick={() => setDeleteEntry(true)}
+                  >
+                    Odstranit platbu
+                  </button>
+                )}
+              </div>
+            )}
           </section>
         </div>
       )}

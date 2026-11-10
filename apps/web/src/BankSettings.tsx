@@ -1,3 +1,4 @@
+import { WalletSelect } from "./Wallets";
 import { useEffect, useState } from "react";
 import { call } from "./Settings";
 import { nativeWidgetSupport } from "./nativeWidgets";
@@ -181,6 +182,31 @@ export function BankSettings({
                 <strong>
                   {a.name} · {a.ibanMasked} · {a.currency}
                 </strong>
+                <label>
+                  Propojený finanční účet
+                  <select
+                    value={a.walletId || ""}
+                    disabled={busy}
+                    onChange={(e) =>
+                      void run(() =>
+                        call(
+                          "/bank-accounts/" + a.id + "/wallet",
+                          { walletId: e.target.value || null },
+                          "PATCH",
+                        ),
+                      )
+                    }
+                  >
+                    <option value="">Bez přiřazení</option>
+                    {(data.wallets || [])
+                      .filter((w: any) => !w.archived)
+                      .map((w: any) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
                 {a.balances.map((b: any, n: number) => (
                   <p key={n}>
                     {b.name || b.balance_type}: {b.balance_amount.amount}{" "}
@@ -269,6 +295,11 @@ export function BankSettings({
                   );
                 }}
               >
+                <WalletSelect
+                  wallets={data.wallets || []}
+                  defaultValue={t.account.walletId || undefined}
+                  label="Cílový účet importu"
+                />
                 <label>
                   Položka pro import
                   <select name="itemId">

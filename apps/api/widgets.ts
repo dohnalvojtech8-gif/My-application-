@@ -1,3 +1,4 @@
+import { walletFor, lockLedger } from "./wallets.js";
 import { Router, type Express } from "express";
 import rateLimit from "express-rate-limit";
 import { PrismaClient } from "@prisma/client";
@@ -7,6 +8,7 @@ import { cents, balance } from "./money.js";
 const digest = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 const preset = z.object({
+  walletId: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(50),
   itemId: z.string().uuid(),
   amount: z.string().refine((v) => {
@@ -60,7 +62,7 @@ export function widgetRouter(db: PrismaClient) {
   router.get("/snapshot", async (_q, r) => {
     const d = r.locals.device;
     const actions = await db.quickAction.findMany({
-      where: { userId: d.userId },
+      where: { userId: d.userId, wallet: { archived: false } },
       orderBy: { createdAt: "asc" },
     });
     const items = await db.item.findMany({
@@ -74,6 +76,7 @@ export function widgetRouter(db: PrismaClient) {
               id: a.id,
               name: a.name,
               itemId: i.id,
+              walletId: a.walletId,
               kind: i.kind,
               amount: a.amount.toString(),
               mode: a.mode,
@@ -83,12 +86,24 @@ export function widgetRouter(db: PrismaClient) {
           ]
         : [];
     });
-    const entries = d.showBalance
-      ? await db.entry.findMany({
-          where: { userId: d.userId, status: "DONE" },
-          include: { item: true },
-        })
-      : [];
+    const totalBalance = d.showBalance
+      ? await db.$transaction(
+          async (tx) => {
+            const wallets = await tx.wallet.findMany({
+              where: { userId: d.userId },
+            });
+            const entries = await tx.entry.findMany({
+              where: { userId: d.userId, status: "DONE" },
+              include: { item: true },
+            });
+            return balance(
+              wallets.reduce((n, w) => n + w.opening, 0n),
+              entries,
+            ).toString();
+          },
+          { isolationLevel: "RepeatableRead" },
+        )
+      : null;
     const parsedPanel = panelSchema.safeParse(d.user.widgetPanel);
     const panel = parsedPanel.success ? parsedPanel.data : emptyPanel();
     const resolveSlots = (ids: (string | null)[], kind: string) =>
@@ -104,9 +119,7 @@ export function widgetRouter(db: PrismaClient) {
         expenses: resolveSlots(panel.expenses, "EXPENSE"),
         incomes: resolveSlots(panel.incomes, "INCOME"),
       },
-      balance: d.showBalance
-        ? balance(d.user.opening, entries).toString()
-        : null,
+      balance: totalBalance,
       actions: available,
       updatedAt: new Date().toISOString(),
     });
@@ -132,10 +145,13 @@ export function widgetRouter(db: PrismaClient) {
     if (!item) return r.status(404).json({ error: "Položka není dostupná" });
     const key = `widget:${d.id}:${requestId}`;
     const entry = await db.$transaction(async (tx) => {
+      await lockLedger(tx, d.userId);
+      await walletFor(tx, d.userId, action.walletId);
       await tx.entry.createMany({
         data: [
           {
             userId: d.userId,
+            walletId: action.walletId,
             itemId: item.id,
             amount: action.amount,
             date: new Intl.DateTimeFormat("sv-SE", {
@@ -237,8 +253,12 @@ export function installWidgetSettings(app: Express, db: PrismaClient) {
     if ((await db.quickAction.count({ where: { userId } })) >= 20)
       return r.status(400).json({ error: "Nejvýše 20 rychlých akcí" });
     r.json(
-      await db.quickAction.create({
-        data: { ...v, userId, amount: cents(v.amount) },
+      await db.$transaction(async (tx) => {
+        await lockLedger(tx, userId);
+        const w = await walletFor(tx, userId, v.walletId);
+        return tx.quickAction.create({
+          data: { ...v, userId, walletId: w.id, amount: cents(v.amount) },
+        });
       }),
     );
   });

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 test("bankovní přehled odděluje cizí měny a import vyžaduje kontrolu", async ({
   page,
 }, info) => {
@@ -7,7 +7,10 @@ test("bankovní přehled odděluje cizí měny a import vyžaduje kontrolu", asy
   await page.getByLabel("Heslo (alespoň 12 znaků)").fill("test-password-12345");
   await page.getByRole("button", { name: "Přihlásit se", exact: true }).click();
   await page.locator("nav").getByRole("button", { name: "Nastavení" }).click();
-  await page.locator("summary").filter({ hasText: "Bankovní účty" }).click();
+  await page
+    .locator("summary")
+    .filter({ hasText: /^Bankovní účty/ })
+    .click();
   const row = page
     .locator("section.card")
     .filter({ hasText: "Bankovní test " + info.project.name });

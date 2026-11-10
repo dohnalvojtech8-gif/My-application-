@@ -722,3 +722,307 @@ suite(
   },
   30000,
 );
+
+suite(
+  "více účtů: izolace, atomické převody, opakování, widgety a obnova",
+  async () => {
+    const password = "test-password-12345";
+    const ownerUser = await db.user.findFirst({ where: { role: "OWNER" } });
+    const admin = request.agent(app).set("X-Forwarded-For", "198.51.100.40");
+    await admin
+      .post("/api/auth/login")
+      .set("Origin", origin)
+      .send({ username: ownerUser.username, password })
+      .expect(200);
+    async function account(username: string, ip: string) {
+      const invitation = await admin
+        .post("/api/admin/invites")
+        .set("Origin", origin)
+        .send({})
+        .expect(200);
+      const agent = request.agent(app).set("X-Forwarded-For", ip);
+      await agent
+        .post("/api/auth/register")
+        .set("Origin", origin)
+        .send({ username, password, invite: invitation.body.invite })
+        .expect(201);
+      await agent
+        .post("/api/auth/login")
+        .set("Origin", origin)
+        .send({ username, password })
+        .expect(200);
+      return agent;
+    }
+    const a = await account("wallet_user", "198.51.100.41"),
+      b = await account("wallet_foreign", "198.51.100.42");
+    const main = (await a.get("/api/data")).body.wallets[0],
+      foreign = (await b.get("/api/data")).body.wallets[0];
+    const savings = (
+      await a
+        .post("/api/wallets")
+        .set("Origin", origin)
+        .send({
+          name: "Spoření",
+          kind: "SAVINGS",
+          color: "#8b5cf6",
+          opening: "1000.25",
+        })
+        .expect(201)
+    ).body;
+    const category = (
+      await a
+        .post("/api/items")
+        .set("Origin", origin)
+        .send({ name: "Test účtů", kind: "EXPENSE", color: "#e11d48" })
+        .expect(200)
+    ).body;
+    await a
+      .patch("/api/wallets/" + foreign.id)
+      .set("Origin", origin)
+      .send({ name: "Cizí", kind: "BANK", color: "#ffffff", opening: "0" })
+      .expect(404);
+    const entry = {
+      itemId: category.id,
+      walletId: savings.id,
+      date: "2026-01-01",
+      amount: "25.10",
+      key: randomUUID(),
+    };
+    await a
+      .post("/api/entries")
+      .set("Origin", origin)
+      .send({ ...entry, walletId: foreign.id })
+      .expect(404);
+    await a.post("/api/entries").set("Origin", origin).send(entry).expect(200);
+    const transfer = {
+      fromId: savings.id,
+      toId: main.id,
+      amount: "200.15",
+      date: "2026-01-01",
+      key: randomUUID(),
+    };
+    const writes = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        a.post("/api/transfers").set("Origin", origin).send(transfer),
+      ),
+    );
+    expect(writes.every((r) => r.status === 200)).toBe(true);
+    expect(new Set(writes.map((r) => r.body.id)).size).toBe(1);
+    await a
+      .post("/api/transfers")
+      .set("Origin", origin)
+      .send({ ...transfer, amount: "201" })
+      .expect(409);
+    await a
+      .post("/api/transfers")
+      .set("Origin", origin)
+      .send({ ...transfer, key: randomUUID(), toId: foreign.id })
+      .expect(404);
+    await a
+      .post("/api/transfers")
+      .set("Origin", origin)
+      .send({ ...transfer, key: randomUUID(), toId: savings.id })
+      .expect(400);
+    let data = (await a.get("/api/data")).body;
+    expect(data.balance).toBe("97515");
+    expect(data.entries).toHaveLength(1);
+    expect(data.transfers).toHaveLength(1);
+    expect(data.wallets.find((w: any) => w.id === savings.id).balance).toBe(
+      "77500",
+    );
+    expect(data.wallets.find((w: any) => w.id === main.id).balance).toBe(
+      "20015",
+    );
+    expect(
+      (await admin.get("/api/data")).body.wallets.some(
+        (w: any) => w.id === savings.id,
+      ),
+    ).toBe(false);
+    const user = await db.user.findUnique({
+      where: { username: "wallet_user" },
+    });
+    await expect(
+      db.entry.create({
+        data: {
+          userId: user.id,
+          walletId: foreign.id,
+          itemId: category.id,
+          amount: 1n,
+          status: "DONE",
+          date: "2026-01-01",
+          key: randomUUID(),
+        },
+      }),
+    ).rejects.toThrow();
+    const series = (
+      await a
+        .post("/api/series")
+        .set("Origin", origin)
+        .send({
+          walletId: savings.id,
+          itemId: category.id,
+          amount: "10",
+          start: "2026-11-10",
+          frequency: "MONTHLY",
+          interval: 1,
+          count: 3,
+        })
+        .expect(200)
+    ).body;
+    await a
+      .post("/api/series/generate")
+      .set("Origin", origin)
+      .send({ horizon: "2027-02-01" })
+      .expect(200);
+    const generated = (await a.get("/api/data")).body.entries.filter(
+      (e: any) => e.seriesId === series.id,
+    );
+    expect(generated).toHaveLength(3);
+    expect(generated.every((e: any) => e.walletId === savings.id)).toBe(true);
+    const action = (
+      await a
+        .post("/api/quick-actions")
+        .set("Origin", origin)
+        .send({
+          name: "Z účtu",
+          itemId: category.id,
+          walletId: savings.id,
+          amount: "5",
+          mode: "DIRECT",
+        })
+        .expect(200)
+    ).body;
+    const device = (
+      await a
+        .post("/api/widget-devices")
+        .set("Origin", origin)
+        .send({ name: "Test", password, showBalance: true })
+        .expect(200)
+    ).body;
+    await request(app)
+      .post("/api/widget/actions/" + action.id)
+      .set("Authorization", "Bearer " + device.token)
+      .send({ requestId: randomUUID() })
+      .expect(200);
+    data = (await a.get("/api/data")).body;
+    expect(data.balance).toBe("97015");
+    expect(
+      data.entries.find((e: any) => e.comment === "Widget · Z účtu").walletId,
+    ).toBe(savings.id);
+    const snap = await request(app)
+      .get("/api/widget/snapshot")
+      .set("Authorization", "Bearer " + device.token)
+      .expect(200);
+    expect(snap.body.balance).toBe(data.balance);
+    const backup = (await a.get("/api/backup")).body;
+    await b.post("/api/restore").set("Origin", origin).send(backup).expect(200);
+    const restored = (await b.get("/api/data")).body;
+    expect(restored.balance).toBe(data.balance);
+    expect(restored.transfers).toHaveLength(1);
+    expect(restored.wallets).toHaveLength(2);
+    expect(restored.series).toHaveLength(1);
+    expect(restored.wallets.map((w: any) => w.id)).not.toContain(savings.id);
+    await b
+      .post("/api/series/generate")
+      .set("Origin", origin)
+      .send({ horizon: "2027-02-01" })
+      .expect(200);
+    expect((await b.get("/api/data")).body.entries).toHaveLength(
+      data.entries.length,
+    );
+    await a
+      .post("/api/wallets/" + savings.id + "/archive")
+      .set("Origin", origin)
+      .send({ archived: true })
+      .expect(200);
+    expect((await a.get("/api/data")).body.balance).toBe("97015");
+    await a
+      .post("/api/entries")
+      .set("Origin", origin)
+      .send({ ...entry, key: randomUUID() })
+      .expect(404);
+    await request(app)
+      .post("/api/widget/actions/" + action.id)
+      .set("Authorization", "Bearer " + device.token)
+      .send({ requestId: randomUUID() })
+      .expect(404);
+    await a
+      .post("/api/wallets/" + main.id + "/archive")
+      .set("Origin", origin)
+      .send({ archived: true })
+      .expect(400);
+    await a
+      .post("/api/wallets/" + savings.id + "/archive")
+      .set("Origin", origin)
+      .send({ archived: false })
+      .expect(200);
+    await a
+      .delete("/api/transfers/" + writes[0].body.id)
+      .set("Origin", origin)
+      .expect(200);
+    data = (await a.get("/api/data")).body;
+    expect(data.balance).toBe("97015");
+    expect(data.wallets.find((w: any) => w.id === main.id).balance).toBe("0");
+  },
+  20000,
+);
+
+suite(
+  "migrace původního zůstatku a všech plateb zachová historii v platném výchozím účtu",
+  async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { z } = await import("zod");
+    const schema = "migration_" + randomUUID().replaceAll("-", "");
+    await db.$transaction(
+      async (tx: any) => {
+        await tx.$executeRawUnsafe('CREATE SCHEMA "' + schema + '"');
+        await tx.$executeRawUnsafe('SET LOCAL search_path TO "' + schema + '"');
+        const folders = readdirSync("prisma/migrations")
+          .filter((n) => /^\d/.test(n))
+          .sort();
+        async function apply(folder: string) {
+          const sql = readFileSync(
+            "prisma/migrations/" + folder + "/migration.sql",
+            "utf8",
+          ).replace(/^--.*$/gm, "");
+          for (const statement of sql
+            .split(";")
+            .map((s) => s.trim())
+            .filter((s) => s && s !== "BEGIN" && s !== "COMMIT"))
+            await tx.$executeRawUnsafe(statement);
+        }
+        for (const folder of folders.slice(0, -1)) await apply(folder);
+        const user = randomUUID(),
+          item = randomUUID(),
+          entry = randomUUID(),
+          series = randomUUID(),
+          quick = randomUUID();
+        await tx.$executeRaw`INSERT INTO "User" (id,username,password,opening) VALUES (${user},'legacy','hash',12345)`;
+        await tx.$executeRaw`INSERT INTO "Item" (id,"userId",name,kind) VALUES (${item},${user},'Původní','EXPENSE')`;
+        await tx.$executeRaw`INSERT INTO "Entry" (id,"userId","itemId",amount,date,status,key) VALUES (${entry},${user},${item},2345,'2026-01-01','DONE','legacy')`;
+        await tx.$executeRaw`INSERT INTO "Series" (id,"userId","itemId",amount,start,frequency) VALUES (${series},${user},${item},100,'2026-01-01','MONTHLY')`;
+        await tx.$executeRaw`INSERT INTO "QuickAction" (id,"userId","itemId",amount,name) VALUES (${quick},${user},${item},100,'Rychlá')`;
+        await apply(folders.at(-1)!);
+        const wallets = await tx.$queryRaw`SELECT * FROM "Wallet"`;
+        expect(wallets).toHaveLength(1);
+        expect(z.string().uuid().safeParse(wallets[0].id).success).toBe(true);
+        expect(wallets[0].opening).toBe(12345n);
+        const entries = await tx.$queryRaw`SELECT * FROM "Entry"`;
+        expect(entries).toHaveLength(1);
+        expect(entries[0].id).toBe(entry);
+        expect(entries[0].amount).toBe(2345n);
+        expect(entries[0].walletId).toBe(wallets[0].id);
+        expect(
+          (await tx.$queryRaw`SELECT "walletId" FROM "Series"`)[0].walletId,
+        ).toBe(wallets[0].id);
+        expect(
+          (await tx.$queryRaw`SELECT "walletId" FROM "QuickAction"`)[0]
+            .walletId,
+        ).toBe(wallets[0].id);
+        await tx.$executeRawUnsafe('DROP SCHEMA "' + schema + '" CASCADE');
+      },
+      { timeout: 20000 },
+    );
+  },
+  25000,
+);

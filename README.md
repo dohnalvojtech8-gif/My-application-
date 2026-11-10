@@ -22,10 +22,11 @@ Pro vývoj backendu `npm run dev`; klient po změnách sestavte `npm run build`.
 - Session cookies HTTP-only/Secure v produkci, Argon2, atomická první registrace, jednorázové pozvánky, blokace účtů, změna hesla odhlašující sessions.
 - Oddělení financí na serveru; OWNER nemá administrátorský endpoint k cizím finančním datům. Složený databázový cizí klíč chrání vazbu platby a položky stejného uživatele.
 - Částky v haléřích přes BigInt; plánované platby nemění zůstatek a nikdy se automaticky nepotvrzují. Potvrzení dovoluje skutečné minulé/dnešní datum. Idempotentní vytvoření platby.
-- Dashboard, týdenní a měsíční kalendář, denní součty, analytika, TOP 5/10, průměry, nejvyšší platby, porovnání období, vyhledávání, CSV a tisk/uložení PDF.
+- Více vlastních účtů (banka, hotovost, spoření), samostatné počáteční zůstatky a interní převody, které nenavyšují příjmy ani výdaje. Společný výběr účtu pro dashboard, kalendář a přehledy; evidence v CZK.
+- Analytické centrum: Souhrn, Položky, Trvalé platby, Transakce a Účty. Barevné grafy s procenty, vývoj zůstatku, TOP 5/10, průměry, maxima, porovnání období, vlastní rozsah, kombinované filtry, CSV a tisk/uložení PDF. [Podrobný návod](REPORTS.md).
 - Položky s barvami, gradientem, ikonami, vybranými značkami Simple Icons, bezpečně překódovaným uploadem, oblíbením/skrytím/pořadím/důležitostí, výchozí částkou a živým náhledem.
 - Opakování den/týden/měsíc/rok, interval, konec/počet, pozastavení generování, úprava série/výskytu a přeskočení (smazání výskytu). Uskutečněné a přeskočené výskyty se znovu negenerují.
-- Preference, rychlé částky, seznam/mřížka, JSON export a obnova transakcí/položek do prázdného účtu.
+- Preference, rychlé částky, seznam/mřížka, JSON export a obnova účtů, položek, transakcí, převodů a opakovaných sérií do prázdného účtu.
 - Centrum upozornění, Web Push subscription a cron worker s nočním klidem. Doručení na fyzická zařízení není ověřeno.
 
 ## Render
@@ -48,13 +49,13 @@ DATABASE_URL=postgresql://.../systematic_test npx playwright test
 
 Integrační test nejprve vyžaduje migrace v testovací DB. Playwright scénáře navazují na účty vytvořené integračním testem. CI připravuje vlastní PostgreSQL a spouští oba kroky.
 
-Ověřeno lokálně i ve webovém CI: TypeScript a produkční build, 10 jednotkových testů a 3 rozsáhlé integrační scénáře (13 testů Vitest), 18 Playwright testů pro mobil/desktop. Přesný rozsah v STATUS.md. Nejde o nezávislý bezpečnostní audit.
+Lokálně ověřeno: TypeScript a produkční build, 14 jednotkových testů a 5 integračních scénářů na PostgreSQL (19 testů Vitest), 22 Playwright testů pro mobil/desktop. CI spouští stejné kontroly při každém pushi. Přesný rozsah v STATUS.md. Nejde o nezávislý bezpečnostní audit.
 
 ## Mobil a provoz
 
 [PWA, iOS, Android a widgety — návod](MOBILE.md). Podepisovací klíče, Apple Developer účet a Android SDK nejsou součástí repozitáře.
 
-Pro úplnou zálohu včetně sessions, pozvánek a konfigurace použijte PostgreSQL `pg_dump` do šifrovaného úložiště a ověřte `pg_restore` do samostatné databáze. Uživatelská JSON obnova obnovuje položky/transakce a počáteční zůstatek, nikoli série, preferences, sessions či push odběry. Databázový administrátor technicky disponuje přístupem k databázi; aplikační OWNER takové API nemá.
+Pro úplnou zálohu včetně sessions, pozvánek a konfigurace použijte PostgreSQL `pg_dump` do šifrovaného úložiště a ověřte `pg_restore` do samostatné databáze. Uživatelská JSON obnova verze 2 přenáší účty s počátečními zůstatky, položky, transakce, interní převody a série do prázdného účtu; podporuje také původní zálohy verze 1. Nepřenáší kompletní vzhled položek, preferences, widgetové předvolby, sessions, bankovní souhlasy ani push odběry. Databázový administrátor technicky disponuje přístupem k databázi; aplikační OWNER takové API nemá.
 
 [Licenční informace k ikonám](LICENSES.md). Nikdy necommitujte `.env`, privátní VAPID klíč nebo mobilní keystore.
 
@@ -68,7 +69,7 @@ Pokud se zobrazí „Databáze není připravená“, nejde o heslo. Ve službě
 
 V Nastavení otevřete **Položky & vzhled**. Příjmy a výdaje mají vlastní seznamy. Editor obsahuje vyhledávání v 3 470 značkách Simple Icons, univerzální ikony Lucide s českými názvy, vlastní obrázky, barevné styly, HEX barvy, směr gradientu, tvar a provedení karty a živý náhled. Změny uložte tlačítkem **Uložit položku**. Položku lze duplikovat, přeuspořádat nebo smazat.
 
-Smazání položku vyřadí z nových plateb; historické a již naplánované transakce zůstanou zachovány, generování jejích opakování se pozastaví. Nová migrace přidává `Item.deletedAt` a proběhne při `npm start`. Žádná uživatelská finanční data se migrací nemažou.
+Smazání je dostupné až po otevření detailu položky a následném potvrzení. Vyřadí položku z nových plateb; historické a již naplánované transakce zůstanou zachovány, generování jejích opakování se pozastaví. Databázové migrace proběhnou při `npm start`. Stávající evidence i počáteční zůstatek se při zavedení více účtů převedou do účtu „Osobní účet“; finanční historie se nemaže.
 
 ## Systémové widgety
 
