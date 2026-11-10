@@ -63,3 +63,9 @@ Pro úplnou zálohu včetně sessions, pozvánek a konfigurace použijte Postgre
 Aplikace nejprve ověří databázi. V prázdné databázi automaticky nabídne **Vytvoření hlavního účtu** a po úspěšné registraci uživatele přihlásí. Vlastní heslo musí mít alespoň 12 znaků; uživatelské jméno nejméně 3 znaky, bez mezer a bez e-mailové adresy.
 
 Pokud se zobrazí „Databáze není připravená“, nejde o heslo. Ve službě Render ověřte `DATABASE_URL` (skutečné PostgreSQL připojení) a dokončení migrací. `npm start` nyní provádí migrace automaticky přes `prestart`. `/api/health` kontroluje také dostupnost registrační tabulky. Aplikace přijímá svůj Render origin z důvěryhodné proměnné `RENDER_EXTERNAL_URL`; vlastní doménu nastavte v `APP_ORIGIN`. Koncové lomítko nevadí.
+
+## Vizuální editor položek
+
+V Nastavení otevřete **Položky & vzhled**. Příjmy a výdaje mají vlastní seznamy. Editor obsahuje vyhledávání v 3 470 značkách Simple Icons, univerzální ikony Lucide s českými názvy, vlastní obrázky, barevné styly, HEX barvy, směr gradientu, tvar a provedení karty a živý náhled. Změny uložte tlačítkem **Uložit položku**. Položku lze duplikovat, přeuspořádat nebo smazat.
+
+Smazání položku vyřadí z nových plateb; historické a již naplánované transakce zůstanou zachovány, generování jejích opakování se pozastaví. Nová migrace přidává `Item.deletedAt` a proběhne při `npm start`. Žádná uživatelská finanční data se migrací nemažou.

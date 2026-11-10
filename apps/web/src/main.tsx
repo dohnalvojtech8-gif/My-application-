@@ -1,3 +1,17 @@
+import { DashboardChart } from "./DashboardChart";
+import { itemStyle } from "./ItemEditor";
+import {
+  WalletCards,
+  House,
+  CalendarDays,
+  ChartNoAxesCombined,
+  Settings as SettingsIcon,
+  UserRound,
+  Menu,
+  Plus,
+  Minus,
+  Pin,
+} from "lucide-react";
 import { Comparison } from "./Comparison";
 import { ItemIcon } from "./ItemIcon";
 import { Week } from "./Week";
@@ -18,14 +32,12 @@ async function api(
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const d = await r
-    .json()
-    .catch(() => ({
-      error:
-        r.status === 429
-          ? "Příliš mnoho pokusů. Vyčkejte několik minut."
-          : "Server není dostupný. Zkuste to prosím znovu.",
-    }));
+  const d = await r.json().catch(() => ({
+    error:
+      r.status === 429
+        ? "Příliš mnoho pokusů. Vyčkejte několik minut."
+        : "Server není dostupný. Zkuste to prosím znovu.",
+  }));
   if (!r.ok) throw Error(d.error);
   return d;
 }
@@ -71,7 +83,8 @@ function App() {
     ),
     [month, setMonth] = useState(new Date()),
     [period, setPeriod] = useState("Měsíc"),
-    [invite, setInvite] = useState("");
+    [invite, setInvite] = useState(""),
+    [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const submitKey = useRef(crypto.randomUUID());
   useEffect(() => {
     if (!form) return;
@@ -150,7 +163,10 @@ function App() {
   if (!data)
     return (
       <main className="login">
-        <h1>◈ SYSTEMATIC MONEY</h1>
+        <h1>
+          <WalletCards size={34} />
+          SYSTEMATIC MONEY
+        </h1>
         <p>Vaše peníze. Váš přehled.</p>
         {open === null ? (
           <section aria-live="polite">
@@ -303,7 +319,17 @@ function App() {
               setMenu(false);
             }}
           >
-            {["⌂", "▦", "▥", "⚙", "♙"][i]}　{n}
+            {React.createElement(
+              [
+                House,
+                CalendarDays,
+                ChartNoAxesCombined,
+                SettingsIcon,
+                UserRound,
+              ][i],
+              { size: 21 },
+            )}{" "}
+            {n}
           </button>
         ))}
         <button onClick={() => setPinned(!pinned)}>
@@ -313,9 +339,12 @@ function App() {
       <main>
         <header>
           <button onClick={() => setMenu(!menu)} aria-label="Otevřít menu">
-            ☰
+            {<Menu size={21} />}
           </button>
-          <strong>◈ SYSTEMATIC MONEY</strong>
+          <strong>
+            <WalletCards size={28} color="#00aa9e" />
+            SYSTEMATIC MONEY
+          </strong>
           <span>{data.user.username}</span>
         </header>
         {error && (
@@ -323,7 +352,32 @@ function App() {
             {error}
           </p>
         )}
-        <h1>{nav[page]}</h1>
+        <div className="page-heading">
+          <div>
+            <span className="eyebrow">
+              SYSTEMATIC MONEY / {nav[page].toUpperCase()}
+            </span>
+            <h1>{nav[page]}</h1>
+            <p>
+              {
+                [
+                  "Každá platba na svém místě. Váš den začíná přehledem.",
+                  "Plánujte dopředu. Mějte přehled o každém dni.",
+                  "Zjistěte, kam vaše peníze směřují.",
+                  "Přizpůsobte si finance tak, jak vám vyhovuje.",
+                  "Váš účet, přístup a zabezpečení.",
+                ][page]
+              }
+            </p>
+          </div>
+          <span className="page-date">
+            {new Date().toLocaleDateString("cs-CZ", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
+          </span>
+        </div>
         {page < 3 && (
           <>
             <div className="period">
@@ -352,13 +406,26 @@ function App() {
               </article>
             </div>
             <div className="actions">
-              <button className="income" onClick={() => setForm("INCOME")}>
-                ＋ PŘÍJEM
+              <button
+                className="income"
+                onClick={() => {
+                  setEditingEntry(null);
+                  setForm("INCOME");
+                }}
+              >
+                {<Plus size={21} />} PŘÍJEM
               </button>
-              <button className="expense" onClick={() => setForm("EXPENSE")}>
-                − VÝDAJ
+              <button
+                className="expense"
+                onClick={() => {
+                  setEditingEntry(null);
+                  setForm("EXPENSE");
+                }}
+              >
+                {<Minus size={21} />} VÝDAJ
               </button>
             </div>
+            {page === 0 && <DashboardChart entries={data.entries} />}
             {page === 2 ? (
               <>
                 <Comparison entries={data.entries} period={period} />
@@ -473,7 +540,13 @@ function App() {
               </article>
             )}
             <article>
-              <h2>Platby · {date}</h2>
+              <h2>
+                Platby ·{" "}
+                {new Date(date + "T12:00:00").toLocaleDateString("cs-CZ", {
+                  day: "numeric",
+                  month: "long",
+                })}
+              </h2>
               <div className="stats">
                 <div className="income">
                   Příjmy{" "}
@@ -549,22 +622,8 @@ function App() {
                   )}
                   <button
                     onClick={() => {
-                      const amount = prompt(
-                        "Nová částka v Kč",
-                        String(Number(e.amount) / 100),
-                      );
-                      if (!amount) return;
-                      const date = prompt("Datum (YYYY-MM-DD)", e.date);
-                      if (!date) return;
-                      const comment = prompt("Komentář", e.comment);
-                      if (comment !== null)
-                        void act(() =>
-                          api(
-                            "/entries/" + e.id,
-                            { itemId: e.item.id, amount, date, comment },
-                            "PATCH",
-                          ),
-                        );
+                      setEditingEntry(e);
+                      setForm(e.item.kind);
                     }}
                   >
                     Upravit
@@ -607,32 +666,6 @@ function App() {
                 <button>Uložit</button>
               </form>
             </article>
-            <article>
-              <h2>Nová položka</h2>
-              <form onSubmit={(e) => submit(e, (v) => api("/items", v))}>
-                <label>
-                  Název
-                  <input name="name" required />
-                </label>
-                <label>
-                  Typ
-                  <select name="kind">
-                    <option value="EXPENSE">Výdaj</option>
-                    <option value="INCOME">Příjem</option>
-                  </select>
-                </label>
-                <label>
-                  Barva
-                  <input type="color" name="color" defaultValue="#00b9b4" />
-                </label>
-                <button>Přidat položku</button>
-              </form>
-              {data.items.map((i) => (
-                <p key={i.id} style={{ color: i.color }}>
-                  ● {i.name} · {i.kind === "INCOME" ? "Příjem" : "Výdaj"}
-                </p>
-              ))}
-            </article>
           </>
         )}
         {page === 4 && (
@@ -671,7 +704,18 @@ function App() {
             className={page === i ? "selected" : ""}
             onClick={() => setPage(i)}
           >
-            <span>{["⌂", "▦", "▥", "⚙", "♙"][i]}</span>
+            <span>
+              {React.createElement(
+                [
+                  House,
+                  CalendarDays,
+                  ChartNoAxesCombined,
+                  SettingsIcon,
+                  UserRound,
+                ][i],
+                { size: 22, strokeWidth: 1.7 },
+              )}
+            </span>
             {n}
           </button>
         ))}
@@ -682,23 +726,37 @@ function App() {
             <button className="close" onClick={() => setForm("")}>
               × Zavřít
             </button>
-            <h2>{form === "INCOME" ? "Nový příjem" : "Nový výdaj"}</h2>
+            <h2>
+              {editingEntry
+                ? "Upravit platbu"
+                : form === "INCOME"
+                  ? "Nový příjem"
+                  : "Nový výdaj"}
+            </h2>
             <form
               onSubmit={(e) =>
                 submit(e, async (v) => {
-                  await api("/entries", { ...v, key: submitKey.current });
+                  if (editingEntry)
+                    await api("/entries/" + editingEntry.id, v, "PATCH");
+                  else await api("/entries", { ...v, key: submitKey.current });
                   setForm("");
                 })
               }
             >
               <label>
                 Datum
-                <input type="date" name="date" defaultValue={date} required />
+                <input
+                  type="date"
+                  name="date"
+                  defaultValue={editingEntry?.date || date}
+                  required
+                />
               </label>
               <label>
                 Položka
                 <select
                   name="itemId"
+                  defaultValue={editingEntry?.item.id}
                   required
                   onChange={(e) => {
                     const item = data.items.find(
@@ -711,6 +769,15 @@ function App() {
                       amount.value = String(Number(item.defaultAmount) / 100);
                   }}
                 >
+                  {editingEntry &&
+                    !data.items.some(
+                      (i) =>
+                        i.id === editingEntry.item.id && !(i as any).hidden,
+                    ) && (
+                      <option value={editingEntry.item.id}>
+                        {editingEntry.item.name} (původní položka)
+                      </option>
+                    )}
                   {data.items
                     .filter((i) => i.kind === form && !(i as any).hidden)
                     .map((i) => (
@@ -730,7 +797,7 @@ function App() {
                       <button
                         type="button"
                         key={i.id}
-                        style={{ color: i.color }}
+                        style={itemStyle(i)}
                         onClick={(e) => {
                           const select =
                             e.currentTarget.form?.elements.namedItem(
@@ -762,13 +829,15 @@ function App() {
                   inputMode="decimal"
                   required
                   defaultValue={
-                    Number(
-                      (
-                        data.items.find(
-                          (i) => i.kind === form && !(i as any).hidden,
-                        ) as any
-                      )?.defaultAmount || 0,
-                    ) / 100 || ""
+                    editingEntry
+                      ? String(Number(editingEntry.amount) / 100)
+                      : Number(
+                          (
+                            data.items.find(
+                              (i) => i.kind === form && !(i as any).hidden,
+                            ) as any
+                          )?.defaultAmount || 0,
+                        ) / 100 || ""
                   }
                 />
               </label>
@@ -794,9 +863,17 @@ function App() {
               )}
               <label>
                 Komentář
-                <input name="comment" maxLength={1000} />
+                <input
+                  name="comment"
+                  defaultValue={editingEntry?.comment || ""}
+                  maxLength={1000}
+                />
               </label>
-              <button disabled={!data.items.some((i) => i.kind === form)}>
+              <button
+                disabled={
+                  !editingEntry && !data.items.some((i) => i.kind === form)
+                }
+              >
                 Uložit
               </button>
             </form>

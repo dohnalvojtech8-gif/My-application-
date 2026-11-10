@@ -39,7 +39,9 @@ export async function generate(
 ) {
   const series = await db.series.findMany({ where: { userId, paused: false } });
   for (const s of series) {
-    const item = await db.item.findFirst({ where: { id: s.itemId, userId } });
+    const item = await db.item.findFirst({
+      where: { id: s.itemId, userId, deletedAt: null },
+    });
     if (!item) continue;
     const rows = [];
     for (let i = 0; i < (s.count ?? 10000); i++) {
@@ -109,7 +111,11 @@ export function installExtended(app: Express, db: PrismaClient) {
       userId = r.locals.user.id;
     if (v.end && v.end < v.start)
       return r.status(400).json({ error: "Konec předchází začátku" });
-    if (!(await db.item.findFirst({ where: { id: v.itemId, userId } })))
+    if (
+      !(await db.item.findFirst({
+        where: { id: v.itemId, userId, deletedAt: null },
+      }))
+    )
       return r.status(404).json({ error: "Položka neexistuje" });
     r.json(
       await db.series.create({
@@ -122,7 +128,9 @@ export function installExtended(app: Express, db: PrismaClient) {
       userId = r.locals.user.id,
       id = String(q.params.id);
     if (
-      !(await db.item.findFirst({ where: { id: v.itemId, userId } })) ||
+      !(await db.item.findFirst({
+        where: { id: v.itemId, userId, deletedAt: null },
+      })) ||
       !(await db.series.findFirst({ where: { id, userId } }))
     )
       return r.status(404).json({ error: "Nenalezeno" });

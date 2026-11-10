@@ -2,30 +2,36 @@ import type { Express } from "express";
 import type { PrismaClient } from "@prisma/client";
 import sharp from "sharp";
 import { z } from "zod";
-import {
-  siNetflix,
-  siSpotify,
-  siApple,
-  siGoogle,
-  siPaypal,
-} from "simple-icons";
+import { brands, brandMap } from "./catalog.js";
 export function installUploads(app: Express, db: PrismaClient) {
-  app.get("/api/brands", (_q, r) =>
-    r.json(
-      [siNetflix, siSpotify, siApple, siGoogle, siPaypal].map((i) => ({
-        name: i.title,
-        color: "#" + i.hex,
-        path: i.path,
-        slug: i.slug,
-        source: i.source,
-        license: i.license ?? null,
-      })),
-    ),
-  );
+  app.get("/api/brands", (q, r) => {
+    const term = String(q.query.q || "")
+      .toLowerCase()
+      .slice(0, 100);
+    const offset = Math.max(0, Number(q.query.offset) || 0);
+    const found = brands.filter((i) =>
+      (i.name + " " + i.slug).toLowerCase().includes(term),
+    );
+    r.json({
+      total: found.length,
+      items: found.slice(offset, offset + 60).map(({ path, ...i }) => i),
+    });
+  });
+  app.get("/api/brands/:slug/icon", (q, r) => {
+    const b = brandMap.get(String(q.params.slug));
+    if (!b) return r.sendStatus(404);
+    r.set("Cache-Control", "private, max-age=86400")
+      .type("image/svg+xml")
+      .send(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="${b.color}" d="${b.path}"/></svg>`,
+      );
+  });
   app.post("/api/items/:id/logo", async (q, r) => {
     const userId = r.locals.user.id,
       id = String(q.params.id);
-    const item = await db.item.findFirst({ where: { id, userId } });
+    const item = await db.item.findFirst({
+      where: { id, userId, deletedAt: null },
+    });
     if (!item) return r.status(404).json({ error: "Nenalezeno" });
     const { data } = z
       .object({
@@ -55,6 +61,6 @@ export function installUploads(app: Express, db: PrismaClient) {
         },
       },
     });
-    r.json({ ok: true });
+    r.json({ logo: "data:image/webp;base64," + output.toString("base64") });
   });
 }

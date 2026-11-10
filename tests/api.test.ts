@@ -187,6 +187,37 @@ suite(
       .set("Origin", origin)
       .send(backup)
       .expect(400);
+    const catalog = await other.get("/api/brands").expect(200);
+    expect(catalog.body.total).toBeGreaterThan(3000);
+    expect(catalog.body.items).toHaveLength(60);
+    const netflix = await other.get("/api/brands?q=netflix").expect(200);
+    expect(netflix.body.items.some((i: any) => i.slug === "netflix")).toBe(
+      true,
+    );
+    await other
+      .get("/api/brands/netflix/icon")
+      .expect("Content-Type", /image\/svg/)
+      .expect(200);
+    await owner
+      .delete("/api/items/" + item.body.id)
+      .set("Origin", origin)
+      .expect(404);
+    const beforeDelete = (await other.get("/api/data")).body;
+    await other
+      .delete("/api/items/" + item.body.id)
+      .set("Origin", origin)
+      .expect(200);
+    const afterDelete = (await other.get("/api/data")).body;
+    expect(afterDelete.items).toHaveLength(0);
+    expect(afterDelete.entries.length).toBe(beforeDelete.entries.length);
+    expect(afterDelete.balance).toBe(beforeDelete.balance);
+    expect(afterDelete.entries[0].item.name).toBe("Soukromé");
+    await other
+      .post("/api/entries")
+      .set("Origin", origin)
+      .send({ ...v, key: randomUUID() })
+      .expect(404);
+    expect((await other.get("/api/series")).body[0].paused).toBe(true);
     const otherUser = await db.user.findUnique({
       where: { username: "other" },
     });

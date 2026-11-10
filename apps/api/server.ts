@@ -1,3 +1,4 @@
+import { brandMap } from "./catalog.js";
 import { allowedOrigins } from "./origin.js";
 import { installRestore } from "./restore.js";
 import { installUploads } from "./uploads.js";
@@ -24,19 +25,25 @@ app.set("json replacer", (_k: string, v: unknown) =>
   typeof v === "bigint" ? v.toString() : v,
 );
 app.use(helmet(), express.json({ limit: "1mb" }), cookies());
-app.use("/api", rateLimit({ windowMs: 60000, limit: 180 }));
+app.use(
+  "/api",
+  rateLimit({
+    windowMs: 60000,
+    limit: 180,
+    skip: (req) =>
+      req.method === "GET" && /^\/brands\/[^/]+\/icon$/.test(req.path),
+  }),
+);
 app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   if (
     !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
     !allowedOrigins().has(req.headers.origin || "")
   )
-    return res
-      .status(403)
-      .json({
-        error:
-          "Adresa aplikace není povolená. Provozovatel musí zkontrolovat APP_ORIGIN na serveru.",
-      });
+    return res.status(403).json({
+      error:
+        "Adresa aplikace není povolená. Provozovatel musí zkontrolovat APP_ORIGIN na serveru.",
+    });
   next();
 });
 const credentials = z.object({
@@ -136,7 +143,7 @@ app.get("/api/data", async (_q, r) => {
   const u = r.locals.user;
   const [items, entries] = await Promise.all([
     db.item.findMany({
-      where: { userId: u.id },
+      where: { userId: u.id, deletedAt: null },
       orderBy: [{ favorite: "desc" }, { position: "asc" }, { name: "asc" }],
     }),
     db.entry.findMany({
@@ -182,9 +189,22 @@ const itemSchema = z.object({
   appearance: z
     .object({
       brand: z
-        .enum(["netflix", "spotify", "apple", "google", "paypal"])
+        .string()
+        .max(100)
+        .refine((v) => brandMap.has(v), "Neznámá značka")
         .optional(),
-      icon: z.string().max(40).optional(),
+      icon: z.string().max(80).optional(),
+      iconColor: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .optional(),
+      gradientEnd: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .optional(),
+      angle: z.number().min(0).max(360).optional(),
+      radius: z.enum(["soft", "round", "square"]).optional(),
+      cardStyle: z.enum(["filled", "outline", "minimal"]).optional(),
       background: z
         .string()
         .regex(/^#[0-9a-fA-F]{6}$/)
@@ -212,7 +232,11 @@ app.post("/api/items", async (q, r) =>
 app.patch("/api/items/:id", async (q, r) => {
   const data = itemSchema.parse(q.body);
   const existing = await db.item.findFirst({
-    where: { id: String(q.params.id), userId: r.locals.user.id },
+    where: {
+      id: String(q.params.id),
+      userId: r.locals.user.id,
+      deletedAt: null,
+    },
   });
   if (!existing || existing.kind !== data.kind)
     return r.status(400).json({ error: "Typ položky nelze změnit" });
@@ -222,6 +246,24 @@ app.patch("/api/items/:id", async (q, r) => {
       data,
     }),
   );
+});
+app.delete("/api/items/:id", async (q, r) => {
+  const userId = r.locals.user.id,
+    id = String(q.params.id);
+  const result = await db.$transaction(async (tx) => {
+    const updated = await tx.item.updateMany({
+      where: { id, userId, deletedAt: null },
+      data: { deletedAt: new Date(), hidden: true },
+    });
+    if (updated.count)
+      await tx.series.updateMany({
+        where: { userId, itemId: id },
+        data: { paused: true },
+      });
+    return updated;
+  });
+  if (!result.count) return r.status(404).json({ error: "Položka neexistuje" });
+  r.json({ ok: true });
 });
 const entrySchema = z.object({
   itemId: z.string().uuid(),
@@ -239,7 +281,9 @@ const entrySchema = z.object({
 app.post("/api/entries", async (q, r) => {
   const v = entrySchema.parse(q.body),
     userId = r.locals.user.id;
-  const item = await db.item.findFirst({ where: { id: v.itemId, userId } });
+  const item = await db.item.findFirst({
+    where: { id: v.itemId, userId, deletedAt: null },
+  });
   if (!item) return r.status(404).json({ error: "Položka neexistuje" });
   r.json(
     await db.entry.upsert({
@@ -372,23 +416,19 @@ app.use(
         .status(400)
         .json({ error: err.issues.map((i) => i.message).join(" ") });
     if (code === "P2002")
-      return r
-        .status(409)
-        .json({
-          error:
-            "Účet již existuje nebo je registrace vlastníka uzavřena. Přihlaste se; další účet vyžaduje pozvánku.",
-        });
+      return r.status(409).json({
+        error:
+          "Účet již existuje nebo je registrace vlastníka uzavřena. Přihlaste se; další účet vyžaduje pozvánku.",
+      });
     if (
       code.startsWith("P1") ||
       ["P2021", "P2022"].includes(code) ||
       (err instanceof Error && err.name === "PrismaClientInitializationError")
     )
-      return r
-        .status(503)
-        .json({
-          error:
-            "Databáze není připravená. Provozovatel musí ověřit DATABASE_URL a spustit databázové migrace. Nejde o chybu hesla.",
-        });
+      return r.status(503).json({
+        error:
+          "Databáze není připravená. Provozovatel musí ověřit DATABASE_URL a spustit databázové migrace. Nejde o chybu hesla.",
+      });
     r.status(400).json({
       error: "Požadavek nelze provést. Zkontrolujte údaje.",
     });

@@ -42,6 +42,7 @@ model Item {
  name String
  kind String
  color String @default("#14b8a6")
+ deletedAt DateTime?
  hidden Boolean @default(false)
  appearance Json @default("{}")
  favorite Boolean @default(false)
