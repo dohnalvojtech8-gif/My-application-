@@ -12,6 +12,23 @@ test("editor vytvoří značkovou položku, upraví vzhled, zduplikuje a smaže"
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Název položky").fill(name);
   await dialog.getByLabel("Výchozí částka").fill("199.90");
+  await dialog.getByLabel("Výběr katalogu").selectOption("cz");
+  await dialog.getByLabel("Hledat ikonu nebo značku").fill("Teddy");
+  const tedi = dialog.getByRole("button", { name: "TEDi", exact: true });
+  await expect(tedi).toBeVisible();
+  await expect
+    .poll(() =>
+      tedi.locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth),
+    )
+    .toBeGreaterThan(0);
+  await tedi.click();
+  await expect(dialog.getByRole("link", { name: "Zdroj: TEDi" })).toBeVisible();
+  await dialog.getByLabel("Výběr katalogu").selectOption("city");
+  await dialog.getByLabel("Hledat ikonu nebo značku").fill("Liberec");
+  await expect(
+    dialog.getByRole("button", { name: "Liberec", exact: true }),
+  ).toBeVisible();
+  await dialog.getByLabel("Výběr katalogu").selectOption("all");
   await dialog.getByLabel("Hledat ikonu nebo značku").fill("netflix");
   await dialog.getByRole("button", { name: "Netflix", exact: true }).click();
   await dialog.getByRole("tab", { name: "Barvy & karta" }).click();

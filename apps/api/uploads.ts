@@ -2,24 +2,27 @@ import type { Express } from "express";
 import type { PrismaClient } from "@prisma/client";
 import sharp from "sharp";
 import { z } from "zod";
-import { brands, brandMap } from "./catalog.js";
+import { findBrands, brandMap } from "./catalog.js";
 export function installUploads(app: Express, db: PrismaClient) {
   app.get("/api/brands", (q, r) => {
     const term = String(q.query.q || "")
       .toLowerCase()
       .slice(0, 100);
     const offset = Math.max(0, Number(q.query.offset) || 0);
-    const found = brands.filter((i) =>
-      (i.name + " " + i.slug).toLowerCase().includes(term),
-    );
+    const found = findBrands(term, String(q.query.group || "all"));
     r.json({
       total: found.length,
-      items: found.slice(offset, offset + 60).map(({ path, ...i }) => i),
+      items: found.slice(offset, offset + 60).map(({ path, image, ...i }) => i),
     });
   });
   app.get("/api/brands/:slug/icon", (q, r) => {
     const b = brandMap.get(String(q.params.slug));
     if (!b) return r.sendStatus(404);
+    if (b.image)
+      return r
+        .set("Cache-Control", "private, max-age=86400")
+        .type("image/webp")
+        .send(Buffer.from(b.image, "base64"));
     r.set("Cache-Control", "private, max-age=86400")
       .type("image/svg+xml")
       .send(

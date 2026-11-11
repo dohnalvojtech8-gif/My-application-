@@ -87,8 +87,9 @@ model Entry {
  seriesId String?
  occurrence Int?
  key String
+ createdAt DateTime? @default(now())
  @@unique([userId,key])
- @@index([userId,date])
+ @@index([userId,date,createdAt])
  @@index([walletId,userId,date])
 }
 
@@ -255,6 +256,7 @@ model Transfer {
  date String
  comment String @default("")
  key String
+ createdAt DateTime? @default(now())
  @@unique([userId,key])
  @@index([userId,date])
  @@index([fromId,userId])

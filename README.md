@@ -49,7 +49,7 @@ DATABASE_URL=postgresql://.../systematic_test npx playwright test
 
 Integrační test nejprve vyžaduje migrace v testovací DB. Playwright scénáře navazují na účty vytvořené integračním testem. CI připravuje vlastní PostgreSQL a spouští oba kroky.
 
-Lokálně ověřeno: TypeScript a produkční build, 14 jednotkových testů a 6 integračních scénářů na PostgreSQL (20 testů Vitest), 24 Playwright testů pro mobil/desktop. Aktuální výsledky jsou v GitHub Actions a STATUS.md. CI spouští stejné kontroly při každém pushi. Nejde o nezávislý bezpečnostní audit.
+Lokálně ověřeno: TypeScript a produkční build, 16 jednotkových testů a 6 integračních scénářů na PostgreSQL (22 testů Vitest), 24 Playwright testů pro mobil/desktop. Aktuální výsledky jsou v GitHub Actions a STATUS.md. CI spouští stejné kontroly při každém pushi. Nejde o nezávislý bezpečnostní audit.
 
 ## Mobil a provoz
 
@@ -77,7 +77,7 @@ Platné pozvánkové kódy jsou záměrně znovu zobrazitelné pouze vlastníku.
 
 ## Vizuální editor položek
 
-V Nastavení otevřete **Položky & vzhled**. Příjmy a výdaje mají vlastní seznamy. Editor obsahuje vyhledávání v 3 470 značkách Simple Icons, univerzální ikony Lucide s českými názvy, vlastní obrázky, barevné styly, HEX barvy, směr gradientu, tvar a provedení karty a živý náhled. Změny uložte tlačítkem **Uložit položku**. Položku lze duplikovat, přeuspořádat nebo smazat.
+V Nastavení otevřete **Položky & vzhled**. Příjmy a výdaje mají vlastní seznamy. Editor obsahuje vyhledávání v 3 470 značkách Simple Icons a dalších 26 log pro ČR, univerzální ikony Lucide s českými názvy, vlastní obrázky, barevné styly, HEX barvy, směr gradientu, tvar a provedení karty a živý náhled. Filtr **Značky v ČR / Česká města / Doprava a doručování v ČR** zpřístupňuje novou sadu. Funguje vyhledávání bez diakritiky i alias „Teddy“ pro TEDi. Zdroje jsou v [CZECH_LOGOS.md](CZECH_LOGOS.md). Změny uložte tlačítkem **Uložit položku**. Položku lze duplikovat, přeuspořádat nebo smazat.
 
 Smazání je dostupné až po otevření detailu položky a následném potvrzení. Vyřadí položku z nových plateb; historické a již naplánované transakce zůstanou zachovány, generování jejích opakování se pozastaví. Databázové migrace proběhnou při `npm start`. Stávající evidence i počáteční zůstatek se při zavedení více účtů převedou do účtu „Osobní účet“; finanční historie se nemaže.
 

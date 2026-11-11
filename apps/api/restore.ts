@@ -34,6 +34,12 @@ const entry = z.object({
   walletId: z.string().uuid().optional(),
   amount,
   date: z.iso.date(),
+  createdAt: z
+    .string()
+    .datetime()
+    .nullable()
+    .optional()
+    .transform((value) => (value ? new Date(value) : null)),
   status: z.enum(["PLANNED", "DONE", "SKIPPED"]),
   comment: z.string().max(1000).default(""),
   seriesId: z.string().uuid().nullable().optional(),
@@ -73,6 +79,12 @@ const series = z.object({
 const transfer = z.object({
   fromId: z.string().uuid(),
   toId: z.string().uuid(),
+  createdAt: z
+    .string()
+    .datetime()
+    .nullable()
+    .optional()
+    .transform((value) => (value ? new Date(value) : null)),
   amount: amount.refine((n) => n > 0n),
   date: z.iso.date(),
   comment: z.string().max(500),

@@ -3,7 +3,7 @@
 ## Ověřeno
 
 - Produkční build Vite, TypeScript, generování Prisma klienta a migrace na PostgreSQL 16.
-- 14 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování, procenta, přestupný rok, porovnání stejně dlouhých období, účtování převodů a projekce opakování.
+- 16 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování, procenta, přestupný rok, porovnání stejně dlouhých období, účtování převodů, projekce opakování, chronologické pořadí a integrita českého katalogu log.
 - Integrační scénář: souběžná první registrace, jediný OWNER, uzavření registrace, jednorázová pozvánka, přihlášení, zákaz běžné administrace pro USER, kontrola Origin, izolace OWNER/USER, vytvoření/úprava/smazání/potvrzení, idempotence, opakování bez duplicit, zachování přeskočených výskytů, zákaz cizího uploadu a neplatného obrazového formátu, obnova s novými ID, zákaz obnovy do neprázdného účtu, blokování sessions.
 - Celkem 6 integračních scénářů včetně bank, widgetů, více účtů, migrace původní evidence a hromadných pozvánek. Nové kontroly ověřují cizí účty, souběžné převody bez duplicit, archivaci, cílový účet widgetu, obnovu včetně sérií a neměnný celkový zůstatek při převodu.
 - 24 Chromium/Playwright testů: přihlášení, dashboard, nastavení, editor, banky, widgety, pozvánky a analytika při 1440×900 a 390×844; procenta, filtry, převody, společný výběr účtu, registrace přes kód, zobrazení aktivovaného jména a kontrola vodorovného přetečení.
@@ -15,6 +15,13 @@
 - PWA manifest, PNG/SVG ikony, service worker s offline zprávou: instalaci ověřit na cílových prohlížečích.
 - Xcode projekt s WidgetKit extension, konfigurací a App Intents pro přímé uložení: simulátorový build app + extension úspěšně ověřen na macOS v GitHub Actions. Test na fyzickém iPhonu a podpisy zbývají.
 - Android AppWidgetProvider s konfigurací, zůstatkem a přímou akcí: debug APK úspěšně sestaveno s JDK 21 a SDK 36. Instalace a funkčnost na fyzickém telefonu zatím neověřena.
+
+## Česká loga a chronologie (11. 11. 2026)
+
+- Přidáno 26 lokálních log pro český trh: TEDi, Action, Valmont, Traficon, dopravní symbol DPMLJ, Praha, Liberec, Brno, Ostrava a další značky. Filtry ČR, města a doprava, hledání bez diakritiky, alias Teddy, zdroj a licence u výběru. Úplný seznam a původ: [CZECH_LOGOS.md](CZECH_LOGOS.md).
+- Platby jsou standardně od nejnovějšího data a uvnitř dne od nejnovějšího vytvoření. Stejné řazení používá API, denní seznam dashboardu/kalendáře a přehled transakcí. Převody mají také čas vytvoření. Záloha a obnova čas zachovávají; úprava či potvrzení platby jej nepřepisují.
+- Starší verze čas vytvoření neukládala. Migrace proto zachovává u starších záznamů neznámý čas; jejich původní pořadí uvnitř dne nelze obnovit. TOP žebříčky mají záměrně pořadí podle částky.
+- Ověřeno sestavení a 22 testů Vitest včetně skutečné PostgreSQL, migrace starší evidence, zachování času při potvrzení a dekódování všech 26 náhledů. CI ověřuje také prohlížečové scénáře editoru a pořadí plateb.
 
 ## Odchylky od úplného původního zadání
 

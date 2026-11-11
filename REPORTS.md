@@ -28,6 +28,8 @@ Přehled trvalých plateb používá pevně následujících 30 dní, nezávisle
 
 ## Detail a bezpečné odstranění
 
+Seznamy plateb mají výchozí pořadí od nejnovějšího data. V rámci stejného dne je první naposledy vytvořený záznam; pořadí je společné pro příjmy i výdaje a zachovává se po obnovení. Původní verze čas vytvoření neukládala, proto u starších záznamů není možné zpětně určit přesné pořadí uvnitř dne. Nová migrace jej nevymýšlí a označuje jako neznámý. TOP žebříčky nadále porovnávají částky a časová osa grafu postupuje zleva doprava.
+
 Mazání není na přehledové kartě položky. Nejdříve otevřete položku v editoru a potom zvolte odstranění a potvrďte je. Historické platby si uchovávají svůj název, barvu a typ. Platbu upravujte nebo mažte z jejího detailu; odstranění výskytu opakování jej označí jako přeskočený. Potvrzení plánované platby nabídne skutečné datum uskutečnění.
 
 ## Export, obnova a aktualizace

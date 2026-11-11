@@ -107,6 +107,18 @@ test("barevné statistiky mají procenta, filtry, detail plateb a přehled opako
   await expect(page.locator(".kpi-income>strong")).toContainText(/2\s?000,00/);
   await expect(page.locator(".kpi-expense>strong")).toHaveText(/750,00/);
   await expect(page.locator(".kpi-savings>strong")).toHaveText(/62,5/);
+  const ledger = await (await page.request.get("/api/data")).json();
+  expect(
+    ledger.entries
+      .filter((e: any) => e.walletId === wallet.id)
+      .map((e: any) => e.item.name),
+  ).toEqual([home.name, food.name, income.name]);
+  await page.getByRole("tab", { name: "Transakce", exact: true }).click();
+  await expect(page.locator(".report-transaction > span > b")).toHaveText([
+    home.name,
+    food.name,
+    income.name,
+  ]);
   await page.getByRole("tab", { name: "Položky", exact: true }).click();
   await expect(page.locator(".report-table")).toContainText("66,7 %");
   await page.screenshot({

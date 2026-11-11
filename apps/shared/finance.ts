@@ -4,6 +4,7 @@ export type FinancialEntry = {
   walletId: string;
   amount: string;
   date: string;
+  createdAt?: string | null;
   status: string;
   comment: string;
   itemId?: string;
@@ -22,6 +23,16 @@ export type FinancialWallet = {
   archived: boolean;
   isDefault: boolean;
 };
+export function newestFirst(
+  a: { date: string; createdAt?: string | null; id: string },
+  b: { date: string; createdAt?: string | null; id: string },
+) {
+  return (
+    b.date.localeCompare(a.date) ||
+    (b.createdAt || "").localeCompare(a.createdAt || "") ||
+    a.id.localeCompare(b.id)
+  );
+}
 export const today = () =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Prague" }).format(
     new Date(),

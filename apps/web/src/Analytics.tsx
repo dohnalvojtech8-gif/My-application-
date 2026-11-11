@@ -43,6 +43,7 @@ import {
   today,
   seriesForecast,
   csvCell,
+  newestFirst,
   decimal,
   type FinancialEntry,
   type FinancialWallet,
@@ -188,8 +189,8 @@ export function Analytics({
         ? -1
         : BigInt(a.amount) < BigInt(b.amount)
           ? 1
-          : 0
-      : b.date.localeCompare(a.date) || a.id.localeCompare(b.id),
+          : newestFirst(a, b)
+      : newestFirst(a, b),
   );
   const pageCount = Math.max(1, Math.ceil(rows.length / 25)),
     safePage = Math.min(page, pageCount - 1);

@@ -3,6 +3,7 @@ import {
   sum,
   net,
   today,
+  newestFirst,
   type FinancialEntry,
   type FinancialWallet,
 } from "../../shared/finance";
@@ -375,9 +376,9 @@ function App() {
   const selectedWallet = wallets.some((w) => w.id === walletId)
     ? walletId
     : "ALL";
-  const scopedEntries = data.entries.filter(
-    (e) => selectedWallet === "ALL" || e.walletId === selectedWallet,
-  );
+  const scopedEntries = data.entries
+    .filter((e) => selectedWallet === "ALL" || e.walletId === selectedWallet)
+    .sort(newestFirst);
   const scopedBalance =
     selectedWallet === "ALL"
       ? data.balance

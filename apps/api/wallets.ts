@@ -38,11 +38,19 @@ export async function ledger(db: DB, userId: string) {
     db.entry.findMany({
       where: { userId },
       include: { item: true },
-      orderBy: [{ date: "desc" }, { id: "asc" }],
+      orderBy: [
+        { date: "desc" },
+        { createdAt: { sort: "desc", nulls: "last" } },
+        { id: "asc" },
+      ],
     }),
     db.transfer.findMany({
       where: { userId },
-      orderBy: [{ date: "desc" }, { id: "asc" }],
+      orderBy: [
+        { date: "desc" },
+        { createdAt: { sort: "desc", nulls: "last" } },
+        { id: "asc" },
+      ],
     }),
     db.item.findMany({
       where: { userId },

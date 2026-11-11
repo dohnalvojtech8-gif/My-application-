@@ -92,6 +92,7 @@ suite(
       .set("Origin", origin)
       .send(v)
       .expect(200);
+    expect(entry.body.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     await other.post("/api/entries").set("Origin", origin).send(v).expect(200);
     expect((await other.get("/api/data")).body.entries).toHaveLength(1);
     expect((await other.get("/api/data")).body.balance).toBe("0");
@@ -114,6 +115,11 @@ suite(
       .set("Origin", origin)
       .send({ date: "2020-01-02" })
       .expect(200);
+    expect(
+      (await other.get("/api/data")).body.entries.find(
+        (e: any) => e.id === entry.body.id,
+      ).createdAt,
+    ).toBe(entry.body.createdAt);
     expect((await other.get("/api/data")).body.balance).toBe("-1530");
     await other
       .post("/api/series")
@@ -1019,6 +1025,20 @@ suite(
           (await tx.$queryRaw`SELECT "walletId" FROM "QuickAction"`)[0]
             .walletId,
         ).toBe(wallets[0].id);
+        await apply("20261110050000_invite_management");
+        await apply("20261110060000_entry_chronology");
+        expect(
+          (
+            await tx.$queryRaw`SELECT "createdAt" FROM "Entry" WHERE id=${entry}`
+          )[0].createdAt,
+        ).toBeNull();
+        const newEntry = randomUUID();
+        await tx.$executeRaw`INSERT INTO "Entry" (id,"userId","walletId","itemId",amount,date,status,key) VALUES (${newEntry},${user},${wallets[0].id},${item},100,'2026-01-01','DONE','with-creation-time')`;
+        expect(
+          (
+            await tx.$queryRaw`SELECT "createdAt" FROM "Entry" WHERE id=${newEntry}`
+          )[0].createdAt,
+        ).toBeInstanceOf(Date);
         await tx.$executeRawUnsafe('DROP SCHEMA "' + schema + '" CASCADE');
       },
       { timeout: 20000 },

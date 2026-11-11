@@ -8,6 +8,7 @@ import {
   previousRange,
   seriesForecast,
   money,
+  newestFirst,
 } from "../apps/shared/finance";
 const row = (
   id: string,
@@ -24,6 +25,23 @@ const row = (
   comment: "",
   item: { id: "food", name: "Jídlo", kind, color: "#ff0000" },
   ...extra,
+});
+it("platby řadí od nejnovějšího dne a v rámci dne od posledního vytvoření", () => {
+  const rows = [
+    row("old", "1", "EXPENSE", { createdAt: "2026-11-10T08:00:00.000Z" }),
+    row("legacy", "2"),
+    row("previous", "3", "INCOME", {
+      date: "2026-11-09",
+      createdAt: "2026-11-10T20:00:00.000Z",
+    }),
+    row("new", "4", "INCOME", { createdAt: "2026-11-10T12:00:00.000Z" }),
+  ];
+  expect(rows.sort(newestFirst).map((r) => r.id)).toEqual([
+    "new",
+    "old",
+    "legacy",
+    "previous",
+  ]);
 });
 it("částky a procentní podíly nepočítají desetinnou čárkou ani nulovým základem", () => {
   const rows = [row("1", "9007199254740993"), row("2", "10")];

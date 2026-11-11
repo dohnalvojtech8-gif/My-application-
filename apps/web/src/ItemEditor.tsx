@@ -187,6 +187,7 @@ export function ItemEditor({
     [amount, setAmount] = useState("0"),
     [tab, setTab] = useState("icon"),
     [library, setLibrary] = useState("brands"),
+    [brandGroup, setBrandGroup] = useState("all"),
     [query, setQuery] = useState(""),
     [brands, setBrands] = useState<any[]>([]),
     [total, setTotal] = useState(0),
@@ -204,7 +205,14 @@ export function ItemEditor({
     let cancelled = false;
     setLoading(true);
     const timer = setTimeout(() => {
-      call("/brands?q=" + encodeURIComponent(query) + "&offset=" + page * 60)
+      call(
+        "/brands?q=" +
+          encodeURIComponent(query) +
+          "&group=" +
+          brandGroup +
+          "&offset=" +
+          page * 60,
+      )
         .then((d) => {
           if (!cancelled) {
             setBrands(d.items);
@@ -222,7 +230,7 @@ export function ItemEditor({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, page, !!draft]);
+  }, [query, page, brandGroup, !!draft]);
   useEffect(() => {
     if (!draft) return;
     const old = document.body.style.overflow;
@@ -578,7 +586,7 @@ export function ItemEditor({
                           aria-label="Hledat ikonu nebo značku"
                           placeholder={
                             library === "brands"
-                              ? "Hledat Netflix, Lidl, PayPal…"
+                              ? "Hledat TEDi, Action, Valmont, Liberec…"
                               : "Hledat jídlo, doprava, bydlení…"
                           }
                           value={query}
@@ -591,13 +599,31 @@ export function ItemEditor({
                     )}
                     {library === "brands" && (
                       <>
+                        <label>
+                          Výběr katalogu
+                          <select
+                            aria-label="Výběr katalogu"
+                            value={brandGroup}
+                            onChange={(e) => {
+                              setBrandGroup(e.target.value);
+                              setPage(0);
+                            }}
+                          >
+                            <option value="all">Všechny značky</option>
+                            <option value="cz">Značky v ČR</option>
+                            <option value="city">Česká města</option>
+                            <option value="transport">
+                              Doprava a doručování v ČR
+                            </option>
+                          </select>
+                        </label>
                         <div className="library-caption">
                           <span>
                             {loading
                               ? "Načítám knihovnu…"
                               : total.toLocaleString("cs-CZ") + " značek"}
                           </span>
-                          <small>Simple Icons</small>
+                          <small>Český katalog + Simple Icons</small>
                         </div>
                         <div className="logo-library">
                           {brands.map((b) => (
@@ -650,9 +676,38 @@ export function ItemEditor({
                           </button>
                         </div>
                         <small className="license-note">
-                          Loga pochází ze Simple Icons (CC0). Ochranné známky
-                          patří vlastníkům; použití se řídí jejich pravidly.
+                          Loga slouží k rozpoznání položek. Ochranné známky
+                          patří vlastníkům; zdroj a licence jsou uvedené u
+                          výběru.
                         </small>
+                        {brands
+                          .filter((b) => b.slug === draft.appearance?.brand)
+                          .map((b) => (
+                            <small className="license-note" key={b.slug}>
+                              <a
+                                href={b.source}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Zdroj: {b.name}
+                              </a>
+                              {b.author ? ` · ${b.author}` : ""} ·{" "}
+                              {b.license?.type || "Simple Icons CC0"}
+                              {b.license?.url && (
+                                <>
+                                  {" "}
+                                  ·{" "}
+                                  <a
+                                    href={b.license.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Podmínky použití
+                                  </a>
+                                </>
+                              )}
+                            </small>
+                          ))}
                       </>
                     )}
                     {library === "icons" && (
