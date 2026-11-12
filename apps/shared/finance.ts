@@ -1,4 +1,5 @@
 import { occurrence } from "../api/recurrence";
+import { currencySymbol } from "./currencies";
 export type FinancialEntry = {
   id: string;
   walletId: string;
@@ -7,6 +8,7 @@ export type FinancialEntry = {
   createdAt?: string | null;
   status: string;
   comment: string;
+  merchant?: string;
   itemId?: string;
   item: { id: string; name: string; kind: string; color: string };
   seriesId?: string | null;
@@ -37,10 +39,13 @@ export const today = () =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Prague" }).format(
     new Date(),
   );
-export function money(value: string | bigint | number): string {
+export function money(
+  value: string | bigint | number,
+  currency = "CZK",
+): string {
   const n = BigInt(value),
     absolute = n < 0n ? -n : n;
-  return `${n < 0n ? "−" : ""}${new Intl.NumberFormat("cs-CZ").format(absolute / 100n)},${String(absolute % 100n).padStart(2, "0")} Kč`;
+  return `${n < 0n ? "−" : ""}${new Intl.NumberFormat("cs-CZ").format(absolute / 100n)},${String(absolute % 100n).padStart(2, "0")} ${currencySymbol(currency)}`;
 }
 export function decimal(value: string | bigint) {
   const n = BigInt(value),
@@ -182,7 +187,7 @@ export function balanceTimeline(
       );
   for (const t of transfers) {
     const delta =
-      (ids.has(t.toId) ? BigInt(t.amount) : 0n) -
+      (ids.has(t.toId) ? BigInt(t.receivedAmount ?? t.amount) : 0n) -
       (ids.has(t.fromId) ? BigInt(t.amount) : 0n);
     changes.set(t.date, (changes.get(t.date) || 0n) + delta);
   }

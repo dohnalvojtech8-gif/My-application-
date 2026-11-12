@@ -1,3 +1,4 @@
+import { currencies } from "../../shared/currencies";
 import { useRef, useState, useEffect } from "react";
 import {
   ArrowLeftRight,
@@ -56,7 +57,7 @@ export function WalletSelect({
           .filter((w) => !w.archived || w.id === include)
           .map((w) => (
             <option value={w.id} key={w.id}>
-              {w.name}
+              {w.name} · {w.currency}
               {w.archived ? " (archivovaný)" : ""}
             </option>
           ))}
@@ -74,6 +75,8 @@ export function Wallets({
   const wallets: FinancialWallet[] = data.wallets || [];
   const [editing, setEditing] = useState<any>(null),
     [transfer, setTransfer] = useState(false),
+    [fromId, setFromId] = useState(wallets.find((w) => !w.archived)?.id || ""),
+    [toId, setToId] = useState(wallets.filter((w) => !w.archived)[1]?.id || ""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [archived, setArchived] = useState(false);
@@ -113,6 +116,8 @@ export function Wallets({
       previous?.focus();
     };
   }, [!!editing, transfer]);
+  const fromCurrency = wallets.find((w) => w.id === fromId)?.currency || "CZK",
+    toCurrency = wallets.find((w) => w.id === toId)?.currency || "CZK";
   const transferKey = useRef(crypto.randomUUID());
   async function run(fn: () => Promise<unknown>) {
     setBusy(true);
@@ -133,8 +138,8 @@ export function Wallets({
           <span className="eyebrow">VAŠE PENÍZE NA JEDNOM MÍSTĚ</span>
           <h2>Finanční účty</h2>
           <p>
-            Oddělené zůstatky, jeden společný přehled. Všechny účty jsou vedené
-            v Kč.
+            Oddělené zůstatky v deseti měnách. Souhrny vždy zobrazují jednu
+            měnu; kurzy se nepřepočítávají automaticky.
           </p>
         </div>
         <div className="report-buttons">
@@ -143,6 +148,7 @@ export function Wallets({
             onClick={() =>
               setEditing({
                 name: "",
+                currency: "CZK",
                 kind: "BANK",
                 color: "#0d9488",
                 opening: "0",
@@ -155,6 +161,8 @@ export function Wallets({
             disabled={wallets.filter((w) => !w.archived).length < 2}
             onClick={() => {
               transferKey.current = crypto.randomUUID();
+              setFromId(wallets.find((w) => !w.archived)?.id || "");
+              setToId(wallets.filter((w) => !w.archived)[1]?.id || "");
               setTransfer(true);
             }}
           >
@@ -186,8 +194,8 @@ export function Wallets({
                 </small>
                 <h3>{w.name}</h3>
               </div>
-              <strong>{money(w.balance)}</strong>
-              <small>Počáteční zůstatek {money(w.opening)}</small>
+              <strong>{money(w.balance, w.currency)}</strong>
+              <small>Počáteční zůstatek {money(w.opening, w.currency)}</small>
               <button
                 aria-label={"Detail účtu " + w.name}
                 onClick={() => setEditing(w)}
@@ -206,9 +214,9 @@ export function Wallets({
         Zobrazit archivované účty
       </label>
       <p className="report-note">
-        Převod pouze přesouvá vlastní peníze. Nevytváří příjem ani výdaj a
-        nemění celkový zůstatek. Archivované účty zůstávají v souhrnu a
-        historii.
+        Převod pouze přesouvá vlastní peníze. Nevytváří příjem ani výdaj a u
+        stejné měny nemění celkový zůstatek. Archivované účty zůstávají v
+        souhrnu a historii.
       </p>
       <article>
         <h3>Převody mezi vlastními účty</h3>
@@ -226,7 +234,17 @@ export function Wallets({
                   {wallets.find((w) => w.id === t.toId)?.name}
                   <small>{t.date}</small>
                 </span>
-                <b>{money(t.amount)}</b>
+                <b>
+                  {money(
+                    t.amount,
+                    wallets.find((w) => w.id === t.fromId)?.currency,
+                  )}{" "}
+                  →{" "}
+                  {money(
+                    t.receivedAmount ?? t.amount,
+                    wallets.find((w) => w.id === t.toId)?.currency,
+                  )}
+                </b>
               </summary>
               <p>{t.comment || "Bez poznámky"}</p>
               <p>
@@ -305,6 +323,26 @@ export function Wallets({
                 </select>
               </label>
               <label>
+                Měna účtu
+                <select
+                  name="currency"
+                  defaultValue={editing.currency || "CZK"}
+                  disabled={!!editing.id}
+                >
+                  {currencies.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code} · {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {editing.id && (
+                <small>
+                  Měna existujícího účtu je pevná, aby se nezměnil význam
+                  historie.
+                </small>
+              )}
+              <label>
                 Barva účtu
                 <input name="color" type="color" defaultValue={editing.color} />
               </label>
@@ -379,17 +417,33 @@ export function Wallets({
                 });
               }}
             >
-              <WalletSelect wallets={wallets} name="fromId" label="Z účtu" />
+              <WalletSelect
+                wallets={wallets}
+                name="fromId"
+                label="Z účtu"
+                value={fromId}
+                onChange={setFromId}
+              />
               <WalletSelect
                 wallets={wallets}
                 name="toId"
                 label="Na účet"
-                defaultValue={wallets.filter((w) => !w.archived)[1]?.id}
+                value={toId}
+                onChange={setToId}
               />
               <label>
-                Částka převodu (Kč)
+                Částka převodu ({fromCurrency})
                 <input name="amount" inputMode="decimal" required />
               </label>
+              {fromCurrency !== toCurrency && (
+                <label>
+                  Skutečně přijatá částka ({toCurrency})
+                  <input name="receivedAmount" inputMode="decimal" required />
+                  <small>
+                    Přesná částka po směně, bez automatického kurzu.
+                  </small>
+                </label>
+              )}
               <label>
                 Datum převodu
                 <input

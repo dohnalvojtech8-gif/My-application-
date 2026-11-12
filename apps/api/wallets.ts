@@ -1,3 +1,4 @@
+import { currencyCodes } from "../shared/currencies.js";
 import type { Express } from "express";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
@@ -30,34 +31,36 @@ export async function lockLedger(db: Prisma.TransactionClient, userId: string) {
   await db.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
 }
 export async function ledger(db: DB, userId: string) {
-  const [wallets, entries, transfers, items, series] = await Promise.all([
-    db.wallet.findMany({
-      where: { userId },
-      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    }),
-    db.entry.findMany({
-      where: { userId },
-      include: { item: true },
-      orderBy: [
-        { date: "desc" },
-        { createdAt: { sort: "desc", nulls: "last" } },
-        { id: "asc" },
-      ],
-    }),
-    db.transfer.findMany({
-      where: { userId },
-      orderBy: [
-        { date: "desc" },
-        { createdAt: { sort: "desc", nulls: "last" } },
-        { id: "asc" },
-      ],
-    }),
-    db.item.findMany({
-      where: { userId },
-      orderBy: [{ favorite: "desc" }, { position: "asc" }, { name: "asc" }],
-    }),
-    db.series.findMany({ where: { userId }, orderBy: { start: "asc" } }),
-  ]);
+  const [wallets, entries, transfers, items, series, budgets] =
+    await Promise.all([
+      db.wallet.findMany({
+        where: { userId },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+      }),
+      db.entry.findMany({
+        where: { userId },
+        include: { item: true },
+        orderBy: [
+          { date: "desc" },
+          { createdAt: { sort: "desc", nulls: "last" } },
+          { id: "asc" },
+        ],
+      }),
+      db.transfer.findMany({
+        where: { userId },
+        orderBy: [
+          { date: "desc" },
+          { createdAt: { sort: "desc", nulls: "last" } },
+          { id: "asc" },
+        ],
+      }),
+      db.item.findMany({
+        where: { userId },
+        orderBy: [{ favorite: "desc" }, { position: "asc" }, { name: "asc" }],
+      }),
+      db.series.findMany({ where: { userId }, orderBy: { start: "asc" } }),
+      db.budget.findMany({ where: { userId } }),
+    ]);
   const rows = entries.map((e) => ({
     ...e,
     item: { ...e.item, ...((e.itemSnapshot as object) || {}) },
@@ -72,11 +75,34 @@ export async function ledger(db: DB, userId: string) {
       transfers.reduce(
         (sum, t) =>
           sum +
-          (t.toId === w.id ? t.amount : t.fromId === w.id ? -t.amount : 0n),
+          (t.toId === w.id
+            ? (t.receivedAmount ?? t.amount)
+            : t.fromId === w.id
+              ? -t.amount
+              : 0n),
         0n,
       ),
   }));
+  const balancesByCurrency = Object.fromEntries(
+    currencyCodes.map((c) => [
+      c,
+      accounts
+        .filter((w) => w.currency === c)
+        .reduce((n, w) => n + w.balance, 0n),
+    ]),
+  );
+  const openingByCurrency = Object.fromEntries(
+    currencyCodes.map((c) => [
+      c,
+      wallets
+        .filter((w) => w.currency === c)
+        .reduce((n, w) => n + w.opening, 0n),
+    ]),
+  );
   return {
+    balancesByCurrency,
+    openingByCurrency,
+    budgets,
     wallets: accounts,
     entries: rows,
     transfers,
@@ -85,8 +111,8 @@ export async function ledger(db: DB, userId: string) {
       ...s,
       item: items.find((i) => i.id === s.itemId),
     })),
-    opening: wallets.reduce((n, w) => n + w.opening, 0n),
-    balance: accounts.reduce((n, w) => n + w.balance, 0n),
+    opening: openingByCurrency.CZK,
+    balance: balancesByCurrency.CZK,
   };
 }
 const amount = z.string().refine((v) => {
@@ -97,6 +123,7 @@ const amount = z.string().refine((v) => {
   }
 }, "Zadejte kladnou částku s nejvýše dvěma desetinnými místy.");
 const walletSchema = z.object({
+  currency: z.enum(currencyCodes).optional(),
   name: z.string().trim().min(1).max(60),
   kind: z.enum(["BANK", "CASH", "SAVINGS", "OTHER"]),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
@@ -130,6 +157,11 @@ export function installWallets(app: Express, db: PrismaClient) {
       await db.$transaction(async (tx) => {
         await lockLedger(tx, userId);
         const old = await walletFor(tx, userId, String(q.params.id), true);
+        if (v.currency && v.currency !== old.currency)
+          throw new FinanceError(
+            400,
+            "Měnu existujícího účtu nelze změnit. Vytvořte nový účet v požadované měně.",
+          );
         if (old.isDefault)
           await tx.user.update({
             where: { id: userId },
@@ -166,6 +198,7 @@ export function installWallets(app: Express, db: PrismaClient) {
         fromId: z.string().uuid(),
         toId: z.string().uuid(),
         amount,
+        receivedAmount: amount.optional(),
         date: z.iso.date(),
         comment: z.string().max(500).default(""),
         key: z.string().uuid(),
@@ -183,6 +216,19 @@ export function installWallets(app: Express, db: PrismaClient) {
     r.json(
       await db.$transaction(async (tx) => {
         await lockLedger(tx, userId);
+        const from = await walletFor(tx, userId, v.fromId, true);
+        const to = await walletFor(tx, userId, v.toId, true);
+        if (from.currency !== to.currency && !v.receivedAmount)
+          throw new FinanceError(
+            400,
+            "Zadejte skutečně přijatou částku v měně cílového účtu.",
+          );
+        const receivedAmount = cents(v.receivedAmount ?? v.amount);
+        if (from.currency === to.currency && receivedAmount !== cents(v.amount))
+          throw new FinanceError(
+            400,
+            "U stejné měny musí být obě částky shodné.",
+          );
         const old = await tx.transfer.findUnique({
           where: { userId_key: { userId, key: v.key } },
         });
@@ -191,6 +237,7 @@ export function installWallets(app: Express, db: PrismaClient) {
             old.fromId !== v.fromId ||
             old.toId !== v.toId ||
             old.amount !== cents(v.amount) ||
+            (old.receivedAmount ?? old.amount) !== receivedAmount ||
             old.date !== v.date ||
             old.comment !== v.comment
           )
@@ -203,7 +250,7 @@ export function installWallets(app: Express, db: PrismaClient) {
         await walletFor(tx, userId, v.fromId);
         await walletFor(tx, userId, v.toId);
         return tx.transfer.create({
-          data: { ...v, userId, amount: cents(v.amount) },
+          data: { ...v, userId, amount: cents(v.amount), receivedAmount },
         });
       }),
     );

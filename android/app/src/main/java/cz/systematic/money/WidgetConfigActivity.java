@@ -18,7 +18,7 @@ public class WidgetConfigActivity extends Activity {
         option("Panel 5 výdajů + 5 příjmů","PANEL","");
         MoneyWidget.executor.execute(()->{try{
             JSONArray actions=WidgetAPI.request(this,"/snapshot",null).getJSONArray("actions");
-            runOnUiThread(()->{for(int n=0;n<actions.length();n++){JSONObject a=actions.optJSONObject(n);option(a.optString("name")+" · "+MoneyWidget.money(a.optString("amount"))+" · "+(a.optString("mode").equals("DIRECT")?"ověřit a uložit":"formulář"),"SINGLE",a.optString("id"));}});
+            runOnUiThread(()->{for(int n=0;n<actions.length();n++){JSONObject a=actions.optJSONObject(n);option(a.optString("name")+" · "+MoneyWidget.money(a.optString("amount"),a.optString("currency","CZK"))+" · "+(a.optString("mode").equals("DIRECT")?"ověřit a uložit":"formulář"),"SINGLE",a.optString("id"));}});
         }catch(Exception e){runOnUiThread(()->{TextView note=new TextView(this);note.setText("Pro přednastavené platby připojte widgety v Nastavení aplikace. Jednoduchý Příjem a Výdaj připojení widgetu nepotřebují.");layout.addView(note);});}});
     }
 }

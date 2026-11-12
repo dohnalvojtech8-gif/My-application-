@@ -24,7 +24,7 @@ test("rychlá akce widgetu otevře předvyplněný formulář bez automatického
   await page.goto("/?action=" + action.id);
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Částka (Kč)")).toHaveValue("123.45");
+  await expect(dialog.getByLabel("Částka (CZK)")).toHaveValue("123.45");
   await expect(dialog.getByRole("combobox", { name: "Položka" })).toHaveValue(
     action.itemId,
   );

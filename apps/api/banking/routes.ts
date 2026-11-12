@@ -370,6 +370,8 @@ export function installBanking(
           itemId: z.string().uuid().optional(),
           entryId: z.string().uuid().optional(),
           czkAmount: z.string().optional(),
+          convertedAmount: z.string().optional(),
+          merchant: z.string().trim().max(120).default(""),
           walletId: z.string().uuid().optional(),
           confirmUncertain: z.boolean().default(false),
         })
@@ -395,9 +397,6 @@ export function installBanking(
             400,
             "Banka neposkytla stálý identifikátor. Nejprve ověřte, zda už platba není evidovaná.",
           );
-        const amount =
-          t.currency === "CZK" ? cents(t.amount) : cents(v.czkAmount || "");
-        if (amount <= 0n) throw new BankError(400, "Částka musí být kladná.");
         const account = await tx.bankAccount.findFirstOrThrow({
           where: { id: t.accountId, userId },
         });
@@ -406,6 +405,15 @@ export function installBanking(
           userId,
           v.walletId || account.walletId || undefined,
         );
+        const amount =
+          t.currency === w.currency
+            ? cents(t.amount)
+            : cents(
+                v.convertedAmount ??
+                  (w.currency === "CZK" ? v.czkAmount : undefined) ??
+                  "",
+              );
+        if (amount <= 0n) throw new BankError(400, "Částka musí být kladná.");
         let entryId: string;
         if (v.action === "LINK") {
           if (!v.entryId)
@@ -458,6 +466,7 @@ export function installBanking(
                 status: "DONE",
                 key: "bank:" + t.id,
                 comment: t.description,
+                merchant: v.merchant,
                 itemSnapshot: {
                   name: item.name,
                   kind: item.kind,

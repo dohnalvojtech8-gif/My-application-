@@ -1,3 +1,5 @@
+import { ExtraInsights } from "./ExtraInsights";
+import { merchantKey } from "../../shared/insights";
 import { useState } from "react";
 import {
   ResponsiveContainer,
@@ -29,7 +31,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import {
-  money,
+  money as formatMoney,
   percentText,
   percentage,
   sum,
@@ -63,15 +65,11 @@ const tabs = [
   ["recurring", "Trvalé platby", CalendarClock],
   ["transactions", "Transakce", ArrowLeftRight],
   ["wallets", "Účty", WalletCards],
+  ["insights", "Rozšířené analýzy", SlidersHorizontal],
 ] as const;
-const chartMoney = (v: any) =>
-  new Intl.NumberFormat("cs-CZ", {
-    style: "currency",
-    currency: "CZK",
-    maximumFractionDigits: 0,
-  }).format(Number(v));
 export function Analytics({
   data,
+  currency,
   period,
   setPeriod,
   walletId,
@@ -80,6 +78,7 @@ export function Analytics({
   onManageSeries,
 }: {
   data: any;
+  currency: string;
   period: string;
   setPeriod: (s: string) => void;
   walletId: string;
@@ -87,11 +86,19 @@ export function Analytics({
   refresh: () => unknown;
   onManageSeries: () => void;
 }) {
+  const money = (v: string | bigint | number) => formatMoney(v, currency);
+  const chartMoney = (v: any) =>
+    new Intl.NumberFormat("cs-CZ", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(Number(v));
   const [tab, setTab] = useState("summary"),
     [anchor, setAnchor] = useState(today()),
     [customFrom, setCustomFrom] = useState(today().slice(0, 7) + "-01"),
     [customTo, setCustomTo] = useState(today()),
     [query, setQuery] = useState(""),
+    [merchant, setMerchant] = useState("ALL"),
     [kind, setKind] = useState("ALL"),
     [status, setStatus] = useState("ALL"),
     [itemId, setItemId] = useState("ALL"),
@@ -105,8 +112,12 @@ export function Analytics({
     [seriesFilter, setSeriesFilter] = useState("ALL"),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false);
-  const all: FinancialEntry[] = data.entries,
-    wallets: FinancialWallet[] = data.wallets || [];
+  const wallets: FinancialWallet[] = (data.wallets || []).filter(
+    (w: FinancialWallet) => w.currency === currency,
+  );
+  const all: FinancialEntry[] = data.entries.filter((e: FinancialEntry) =>
+    wallets.some((w) => w.id === e.walletId),
+  );
   const scope = all.filter(
     (e) => walletId === "ALL" || e.walletId === walletId,
   );
@@ -123,11 +134,12 @@ export function Analytics({
   const low = bounds(min),
     high = bounds(max);
   const match = (e: FinancialEntry) =>
+    (merchant === "ALL" || merchantKey(e.merchant) === merchant) &&
     (kind === "ALL" || e.item.kind === kind) &&
     (status === "ALL" || e.status === status) &&
     (itemId === "ALL" || (e.itemId || e.item.id) === itemId) &&
     (!onlyRegular || !!e.seriesId) &&
-    (e.item.name + " " + e.comment)
+    (e.item.name + " " + e.comment + " " + (e.merchant || ""))
       .toLocaleLowerCase("cs-CZ")
       .includes(query.toLocaleLowerCase("cs-CZ")) &&
     (low === null || BigInt(e.amount) >= low) &&
@@ -201,6 +213,8 @@ export function Analytics({
   const regular = (data.series || [])
     .filter(
       (s: any) =>
+        wallets.some((w) => w.id === s.walletId) &&
+        (merchant === "ALL" || merchantKey(s.merchant) === merchant) &&
         (walletId === "ALL" || s.walletId === walletId) &&
         (kind === "ALL" || s.item?.kind === kind) &&
         (itemId === "ALL" || s.itemId === itemId) &&
@@ -232,6 +246,7 @@ export function Analytics({
   const regularShare = percentage(recurringExpense, expense);
   function reset() {
     setQuery("");
+    setMerchant("ALL");
     setKind("ALL");
     setStatus("ALL");
     setItemId("ALL");
@@ -248,7 +263,9 @@ export function Analytics({
         "Účet",
         "Položka",
         "Typ",
-        "Částka Kč",
+        "Částka",
+        "Měna",
+        "Obchodník",
         "Stav",
         "Opakovaná",
         "Komentář",
@@ -262,6 +279,8 @@ export function Analytics({
           e.item.name,
           e.item.kind === "INCOME" ? "Příjem" : "Výdaj",
           decimal(e.amount),
+          currency,
+          e.merchant || "",
           statuses[e.status],
           e.seriesId ? "Ano" : "Ne",
           e.comment,
@@ -492,10 +511,37 @@ export function Analytics({
               Zadejte platné období. Konec nesmí předcházet začátku.
             </p>
           )}
+          <label className="merchant-filter">
+            Obchodník
+            <select
+              value={merchant}
+              onChange={(e) => {
+                setMerchant(e.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="ALL">Všichni obchodníci</option>
+              <option value="">Neuvedený obchodník</option>
+              {[
+                ...new Map(
+                  scope
+                    .filter((e) => e.merchant?.trim())
+                    .map((e) => [merchantKey(e.merchant), e.merchant!]),
+                ).entries(),
+              ]
+                .sort((a, b) => a[1].localeCompare(b[1], "cs"))
+                .map(([k, n]) => (
+                  <option key={k} value={k}>
+                    {n}
+                  </option>
+                ))}
+            </select>
+          </label>
           <details className="advanced-filters">
             <summary>
               <SlidersHorizontal size={17} /> Podrobnější filtry{" "}
-              {query ||
+              {merchant !== "ALL" ||
+              query ||
               kind !== "ALL" ||
               status !== "ALL" ||
               itemId !== "ALL" ||
@@ -509,7 +555,7 @@ export function Analytics({
               <label>
                 Hledat platbu
                 <input
-                  placeholder="Název nebo komentář"
+                  placeholder="Položka, obchodník nebo komentář"
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);
@@ -566,7 +612,7 @@ export function Analytics({
                 </select>
               </label>
               <label>
-                Částka od (Kč)
+                Částka od ({currency})
                 <input
                   inputMode="decimal"
                   value={min}
@@ -577,7 +623,7 @@ export function Analytics({
                 />
               </label>
               <label>
-                Částka do (Kč)
+                Částka do ({currency})
                 <input
                   inputMode="decimal"
                   value={max}
@@ -1186,6 +1232,7 @@ export function Analytics({
                   <b>{e.item.name}</b>
                   <small>
                     {e.date} · {wallets.find((w) => w.id === e.walletId)?.name}
+                    {e.merchant ? " · " + e.merchant : ""}
                     {e.seriesId ? " · opakovaná" : ""}
                   </small>
                   {e.comment && <small>{e.comment}</small>}
@@ -1235,6 +1282,19 @@ export function Analytics({
             </button>
           </div>
         </article>
+      )}
+      {tab === "insights" && (
+        <ExtraInsights
+          data={data}
+          rows={filtered}
+          previous={previous}
+          history={scope}
+          currency={currency}
+          walletId={walletId}
+          anchor={period === "Vlastní" ? customTo || today() : anchor}
+          canCompare={!!compare}
+          onEdit={onEdit}
+        />
       )}
       {tab === "wallets" && <Wallets data={data} refresh={refresh} />}
     </div>

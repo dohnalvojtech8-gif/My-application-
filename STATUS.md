@@ -3,10 +3,10 @@
 ## Ověřeno
 
 - Produkční build Vite, TypeScript, generování Prisma klienta a migrace na PostgreSQL 16.
-- 16 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování, procenta, přestupný rok, porovnání stejně dlouhých období, účtování převodů, projekce opakování, chronologické pořadí a integrita českého katalogu log.
+- 20 jednotkových testů: přesné částky, neplatné vstupy, plánované platby mimo zůstatek, měsíční/roční/týdenní opakování, procenta, přestupný rok, porovnání stejně dlouhých období, účtování převodů, projekce opakování, chronologické pořadí a integrita českého katalogu log.
 - Integrační scénář: souběžná první registrace, jediný OWNER, uzavření registrace, jednorázová pozvánka, přihlášení, zákaz běžné administrace pro USER, kontrola Origin, izolace OWNER/USER, vytvoření/úprava/smazání/potvrzení, idempotence, opakování bez duplicit, zachování přeskočených výskytů, zákaz cizího uploadu a neplatného obrazového formátu, obnova s novými ID, zákaz obnovy do neprázdného účtu, blokování sessions.
-- Celkem 6 integračních scénářů včetně bank, widgetů, více účtů, migrace původní evidence a hromadných pozvánek. Nové kontroly ověřují cizí účty, souběžné převody bez duplicit, archivaci, cílový účet widgetu, obnovu včetně sérií a neměnný celkový zůstatek při převodu.
-- 24 Chromium/Playwright testů: přihlášení, dashboard, nastavení, editor, banky, widgety, pozvánky a analytika při 1440×900 a 390×844; procenta, filtry, převody, společný výběr účtu, registrace přes kód, zobrazení aktivovaného jména a kontrola vodorovného přetečení.
+- Celkem 7 integračních scénářů včetně bank, widgetů, více účtů, migrace původní evidence a hromadných pozvánek. Nové kontroly ověřují cizí účty, souběžné převody bez duplicit, archivaci, cílový účet widgetu, obnovu včetně sérií a neměnný celkový zůstatek při převodu.
+- 26 Chromium/Playwright testů: přihlášení, dashboard, nastavení, editor, banky, widgety, pozvánky a analytika při 1440×900 a 390×844; procenta, filtry, převody, společný výběr účtu, registrace přes kód, zobrazení aktivovaného jména a kontrola vodorovného přetečení.
 - Render YAML vyhovuje veřejnému schématu draft 2020-12.
 
 ## Implementováno, vyžaduje provozní ověření
@@ -27,8 +27,8 @@
 
 - Widgety jsou implementované pro formulář i přímý zápis předvolených příjmů/výdajů a volitelný zůstatek. Jednotlivé přímé akce na zamčené obrazovce iOS používají systémové ověření; velký panel 5 + 5 se nabízí na ploše. Viz [MOBILE.md](MOBILE.md) pro nastavení a platformní omezení.
 - Mobilní push používá webovou cestu tam, kde ji systém podporuje; samostatné nativní APNs/FCM doručování není implementované.
-- Bez tematických presetů a změny měny (aktuálně CZK), individuálních upozornění na jednotlivé série a úplného auditu systémových událostí.
-- Uživatelská obnova verze 2 přenáší i účty, převody a série. Nepřenáší kompletní vzhled položek, preference, widgetové předvolby ani externí přístupy; kompletní provozní obnova je přes PostgreSQL.
+- Bez individuálních upozornění na jednotlivé série a úplného auditu systémových událostí. Rozpočty, deset měn a přizpůsobení vzhledu doplněny 12. 11. 2026.
+- Uživatelská obnova verze 3 přenáší i měny, obchodníky, rozpočty, účty, převody a série; podporuje verze 1/2. Nepřenáší kompletní vzhled položek, preference, widgetové předvolby ani externí přístupy; kompletní provozní obnova je přes PostgreSQL.
 - PDF je export přes tisk prohlížeče. Editace částky/data/komentáře platby používá formulář aplikace.
 - Notifikace jsou při síťové chybě doručení zaznamenány v centru; automatický retry fronty push není implementovaný.
 - Pokročilé grafy denního panelu, editace typu položky a rozsáhlé E2E pokrytí všech editorů ještě chybí.
@@ -69,7 +69,7 @@ Tento soubor záměrně rozlišuje implementaci, ověření a zbývající čás
 ## Bankovní integrace (10. 11. 2026)
 
 - Implementováno Enable Banking AIS: živý katalog podle země a osobního/firemního účtu (včetně dostupných konektorů Revolutu), autorizace, souhlasy, zůstatky, stránkovaná synchronizace, import/párování a odpojení.
-- Bankovní zůstatky zůstávají v původní měně, evidence je nadále CZK. Nejde o záruku podpory všech bank a produktů ani o automatické bankovní účtování bez kontroly uživatele.
+- Bankovní zůstatky zůstávají v původní měně; od 12. 11. 2026 evidence podporuje deset měn. Nejde o záruku podpory všech bank a produktů ani o automatické bankovní účtování bez kontroly uživatele.
 - Testy používají skutečnou PostgreSQL a testovací odpovědi poskytovatele. Živý ani poskytovatelův sandbox účet nebyl připojen; aktivaci a vlastní klíče musí zajistit provozovatel podle [BANKING.md](BANKING.md).
 - Automatický worker potřebuje stejné bankovní klíče jako web. Sestavení nativních aplikací nezajišťuje jejich podpis ani instalaci na uživatelův telefon.
 
@@ -87,3 +87,13 @@ Tento soubor záměrně rozlišuje implementaci, ověření a zbývající čás
 - Přehled uchovává stav: čeká na registraci, aktivováno, platnost skončila, zrušeno. Po aktivaci se místo kódu zobrazuje uživatelské jméno; automatické obnovení každých 15 sekund. Starší záznamy bez dohledatelné identity jsou výslovně označené.
 - Integrační test ověřuje počet a jedinečnost kódů, přístup pouze pro OWNER, zrušení, expiraci, odstranění použitého kódu, souběžné uplatnění jedné pozvánky a zachování platnosti po neúspěšné registraci s obsazeným jménem. Celkem 20 Vitest testů prošlo lokálně.
 - Prohlížeč ověřuje hromadné vytvoření, zachování kódu po obnovení stránky, registraci v odděleném prohlížečovém kontextu a nahrazení kódu uživatelským jménem na mobilu i desktopu. Celkem 24 Playwright testů prošlo lokálně.
+
+## Rozpočty, měny, vzhled a nové analýzy (12. 11. 2026)
+
+- Každý účet má vlastní rozpočet na týden/měsíc/rok, volitelný limit jedné výdajové platby, práh varování, pauzu a odstranění. Dashboard i statistiky ukazují čerpání, plán, zbytek a překročení; jde o upozornění v aplikaci, nikoli zákaz zápisu či bankovní limit.
+- CZK, EUR, USD, GBP, CHF, PLN, HUF, SEK, NOK, DKK. Pevná měna účtu, oddělené souhrny, explicitní odeslaná/přijatá částka u směny. Žádné automatické kurzy ani sčítání různých měn. Aktualizován bankovní import, CSV, zálohy a částky widgetů.
+- Vzhled: světlý/tmavý/systémový motiv, akcent HEX/paleta, panel, rohy, rozestupy, velikost textu, omezení animací, tři volitelné sekce dashboardu. Živý náhled, uložení, zrušení změn a návrat k výchozímu vzhledu. Preference jsou soukromé a ostatní nastavení je nepřepisuje.
+- Obchodník v platbě, sérii a předvolbě widgetu. Filtr v přehledech, srovnání nákupů a průměrů; neobvyklé výdaje mají explicitní pravidlo (trojnásobek mediánu nejméně pěti dřívějších nákupů za 90 dní). Třetí novou analýzou je kumulativní čerpání rozpočtu.
+- Lokálně prošlo všech 27 Vitest testů (20 jednotkových + 7 integračních na PostgreSQL), nová migrace i produkční build. 24 původních Playwright scénářů a 2 nové scénáře pro EUR, rozpočty, obchodníky, analýzy a perzistenci vzhledu prošly na desktopu i mobilní šířce. Zkontrolován snímek tmavého mobilního přehledu; nejde o test fyzických telefonů.
+- Nativní měnové popisky vyžadují novou instalovanou verzi. Volitelný zůstatek widgetu zůstává součtem korunových účtů. Sestavení změn kontroluje workflow Native apps; instalace, podpisy, obchody a živé banky nejsou součástí tohoto ověření.
+- Záloha verze 3 zachovává měny, obchodníky, rozpočty a obě částky převodů. Změny rozpočtu nemají vlastní historii a zbytky se nepřenášejí do dalšího období. Návod a pravidla jsou v REPORTS.md.

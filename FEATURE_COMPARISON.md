@@ -1,6 +1,6 @@
 # SYSTEMATIC MONEY a Spendee
 
-Stav zpracování: 10. listopadu 2026. Spendee je popsáno podle oficiální dokumentace, nikoli podle vlastního měření nebo testu placeného účtu. U SYSTEMATIC MONEY vychází stav z kódu a provedených kontrol. Nenalezená informace neznamená, že funkce v konkurenční aplikaci neexistuje. „Potenciální výhoda“ je hypotéza k ověření s uživateli.
+Stav SYSTEMATIC MONEY: 12. listopadu 2026; podklady Spendee z 10. listopadu 2026. Spendee je popsáno podle oficiální dokumentace, nikoli podle vlastního měření nebo testu placeného účtu. U SYSTEMATIC MONEY vychází stav z kódu a provedených kontrol. Nenalezená informace neznamená, že funkce v konkurenční aplikaci neexistuje. „Potenciální výhoda“ je hypotéza k ověření s uživateli.
 
 ## 1. Funkce Spendee
 
@@ -29,7 +29,7 @@ Stav zpracování: 10. listopadu 2026. Spendee je popsáno podle oficiální dok
 |---|---|---|
 | Web, PWA, iOS a Android | Společný backend, databáze a účet; nativní aplikace s Capacitor a vlastními widgety. | Web build, Android APK i iOS simulátorový build prošly. V obchodech nezveřejněno. |
 | Uživatelé a soukromí | OWNER, hromadné jednorázové pozvánky s přehledem aktivací, blokace, sessions; uživatelská data oddělena na serveru. | Integrační kontroly izolace a souběžné aktivace, registrace přes kód v E2E; není to nezávislý bezpečnostní audit. |
-| Příjmy a výdaje | Vytvoření, úprava, smazání až v detailu, počáteční zůstatek každého účtu, přesné uložení v haléřích. | Výpočty a API pokryty testy. Evidence v CZK. |
+| Příjmy a výdaje | Vytvoření, úprava, smazání až v detailu, počáteční zůstatek každého účtu, přesné uložení v haléřích. | Výpočty a API pokryty testy. Evidence v deseti měnách, bez automatických kurzů. |
 | Skutečné versus plánované | Plánované platby se do zůstatku započtou až po potvrzení se skutečným datem. | Ověřeno integračně. |
 | Dashboard a kalendáře | Období, týdenní a měsíční kalendář, denní platby a součty. | Responzivní web testován ve dvou velikostech. Denní analytický panel má prostor pro rozšíření. |
 | Statistiky | Barevné grafy s procenty, míra úspor, vývoj zůstatku, TOP 5/10, četnost, průměry, maxima, porovnání období, vlastní rozsah a kombinované filtry. | Výpočty jednotkově; E2E ověřují procenta, filtrování, detail a společný výběr účtu. Nikoli všechny kombinace filtrů. |
@@ -41,9 +41,11 @@ Stav zpracování: 10. listopadu 2026. Spendee je popsáno podle oficiální dok
 | Upozornění | Centrum, Web Push a plánovací worker. | Skutečné doručení na telefon neověřeno; nativní APNs/FCM chybí. |
 | Export a obnova | Filtrovaný CSV, PDF přes tisk, JSON záloha účtů, položek, transakcí, převodů a sérií. | Obnova do prázdného účtu testována; kompletní obnovu serveru z PostgreSQL je třeba provozně nacvičit. |
 | Banky | Integrace Enable Banking implementovaná; aktivace poskytovatele a test živých účtů zbývají. | Revolut/ostatní banky podle aktuálního katalogu, ne všechny produkty. Viz BANKING.md. |
-| Více účtů / peněženek | Vlastní bankovní, hotovostní, spořicí a ostatní účty; převody, archivace a cílový účet bankovního importu. | CZK, soukromé účty jednoho uživatele. Izolace, převody bez duplicit, migrace a obnova testovány. |
-| Rozpočty | Zatím neimplementováno. | Bez rozpočtových limitů a obálek. |
-| Další chybějící oblasti | AI účtenky, offline zápisy, společné peněženky, více měn, ucelený zámek celé aplikace. | Nejde o hotové funkce ani o slíbené datum dodání. |
+| Více účtů / peněženek | Vlastní bankovní, hotovostní, spořicí a ostatní účty; převody, archivace a cílový účet bankovního importu. | Deset měn, soukromé účty jednoho uživatele. Izolace, převody bez duplicit, migrace a obnova testovány. |
+| Rozpočty | Týdenní/měsíční/roční limit účtu, práh varování, limit jedné platby, čerpání v čase a plán. | Web i mobilní web, výpočty/API/E2E. Bez obálek a převodu zbytku; limity neblokují zápis. |
+| Obchodníci a nové analýzy | Samostatný filtr, počet nákupů a průměr, porovnání období, kontrola neobvyklých výdajů podle mediánu. | Ručně uvedený obchodník, u anomálií nejméně pět starších nákupů; žádné tvrzení o podvodu. |
+| Vzhled celé aplikace | Světlý/tmavý/systémový motiv, akcent HEX, boční panel, rozestupy, rohy, text a sekce dashboardu. | Uložení na uživatelský účet; náhled a perzistence ověřovány v E2E. |
+| Další chybějící oblasti | AI účtenky, offline zápisy, společné peněženky, automatické kurzy, ucelený zámek celé aplikace. | Nejde o hotové funkce ani o slíbené datum dodání. |
 
 ## 3. Funkce a vlastnosti, které mohou dát výhodu
 
@@ -55,7 +57,7 @@ Ne všechny položky jsou novinkou proti Spendee. Dorovnání základů je nutn�
 | P0 · Sjednocené ovládání | Dotáhnout stejné hlavní úkony na webu, iOS a Androidu; přístupnost, stav načítání a srozumitelné chyby. | Menší překvapení při změně zařízení. | Testování stejných scénářů na všech platformách. |
 | P1 · Rychlé zadávání | Dotažené widgety, 5 + 5, vlastní předvolby a volitelné zkratky. | Méně kroků u každodenních plateb; kandidát odlišení, ne doložená převaha. | Změřit čas a počet kroků proti Spendee na stejném telefonu. |
 | P1 · Vizuální editor | Rozvinout současné knihovny, vlastní loga, vzhled karet a náhled napříč widgety a webem. | Přesnější přizpůsobení konkrétnímu člověku. | Ověřit s uživateli, že položku rychleji najdou a správně vyberou. |
-| P1 · Rozpočty i na webu | Rozpočty, obálky, převod nevyčerpaných peněz a shodné ovládání na všech platformách. | Dokumentace Spendee uvádí rozpočty jen na mobilu; plný web je konkrétní příležitost. | Stejný výsledek rozpočtu na webu i telefonu, včetně přelomu měsíce. |
+| P1 · Rozpočty i na webu | Rozšířit již implementované rozpočty o obálky a převod nevyčerpaných peněz a shodné ovládání na všech platformách. | Dokumentace Spendee uvádí rozpočty jen na mobilu; plný web je konkrétní příležitost. | Stejný výsledek rozpočtu na webu i telefonu, včetně přelomu měsíce. |
 | P1 · Banky, měny, peněženky | Bezpečné účty, převody, kurzy a bankovní synchronizace přes vhodného poskytovatele. | Především dorovnání konkurenčního základu, nikoli automatická výhoda. | Párování importů bez duplicit, testy kurzů; vyřešit náklady a přístupy poskytovatele. |
 | P2 · Budoucí zůstatek | Projekce na 30/90 dní, oddělené potvrzené a očekávané platby, scénáře „co když“. | Pomoc před vznikem nedostatku peněz. | Ukázat zdroj každé projekce; žádné automatické potvrzování plánů. |
 | P2 · Sdílení se soukromím | Soukromé a společné peněženky, společný rozpočet, jasná oprávnění. | Spendee podle dokumentace nesdílí rozpočty; prostor pro lepší spolupráci. | Test izolace soukromých dat i při sdílení a odebrání členství. |
@@ -64,4 +66,4 @@ Ne všechny položky jsou novinkou proti Spendee. Dorovnání základů je nutn�
 | P2 · Přenositelnost | Průvodce importem ze Spendee, přehledné mapování kategorií a plná obnova/export z webu. | Jednodušší přechod a menší závislost na aplikaci. | Import/export zachová částky, měny, data, vazby a součty. |
 | P2 · Předplatná a cíle | Detekce zdražení, roční cena služeb, upozornění na obnovení, spořicí cíle. | Praktická doporučení založená na vlastních datech. | Doložit každý závěr konkrétními transakcemi; žádná neověřitelná tvrzení o úspoře. |
 
-Doporučené pořadí: ověřit widgety na zařízeních → uživatelské ověření nových přehledů a účtů → rozpočty a měny → živé bankovní propojení → rozšířené projekce a další odlišení. Vydání do obchodů je samostatný krok s podpisy, soukromím, smazáním účtu a kontrolou Apple/Google; není nyní hotové.
+Doporučené pořadí: ověřit widgety na zařízeních → uživatelské ověření nových přehledů a účtů → uživatelské ověření rozpočtů a měn → živé bankovní propojení → rozšířené projekce a další odlišení. Vydání do obchodů je samostatný krok s podpisy, soukromím, smazáním účtu a kontrolou Apple/Google; není nyní hotové.

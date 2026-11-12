@@ -1,3 +1,5 @@
+import { Budgets } from "./Budgets";
+import { DesignSettings } from "./DesignSettings";
 import { Invitations } from "./Invitations";
 import { Wallets, WalletSelect } from "./Wallets";
 import { BankSettings } from "./BankSettings";
@@ -59,6 +61,8 @@ export function Settings({
   return (
     <>
       <p role="status">{message}</p>
+      <DesignSettings saved={data.user.preferences?.design} refresh={refresh} />
+      <Budgets data={data} refresh={refresh} />
       <ItemEditor items={data.items} refresh={refresh} />
       <details className="settings-group">
         <summary>
@@ -211,7 +215,7 @@ export function Settings({
               </select>
             </label>
             <label>
-              Částka
+              Částka v měně vybraného účtu
               <input
                 name="amount"
                 required
@@ -219,6 +223,14 @@ export function Settings({
                 defaultValue={
                   seriesEditing ? Number(seriesEditing.amount) / 100 : undefined
                 }
+              />
+            </label>
+            <label>
+              Obchodník opakované platby
+              <input
+                name="merchant"
+                maxLength={120}
+                defaultValue={seriesEditing?.merchant || ""}
               />
             </label>
             <label>

@@ -17,6 +17,7 @@ beforeAll(async () => {
   await db.series.deleteMany();
   await db.item.deleteMany();
   await db.session.deleteMany();
+  await db.budget.deleteMany();
   await db.user.deleteMany();
   await db.invite.deleteMany();
   await db.bootstrap.deleteMany();
@@ -1032,6 +1033,15 @@ suite(
             await tx.$queryRaw`SELECT "createdAt" FROM "Entry" WHERE id=${entry}`
           )[0].createdAt,
         ).toBeNull();
+        await apply("20261112010000_budgets_currencies_merchants");
+        expect(
+          (
+            await tx.$queryRaw`SELECT merchant,amount FROM "Entry" WHERE id=${entry}`
+          )[0],
+        ).toEqual({ merchant: "", amount: 2345n });
+        expect(
+          (await tx.$queryRaw`SELECT currency FROM "Wallet"`)[0].currency,
+        ).toBe("CZK");
         const newEntry = randomUUID();
         await tx.$executeRaw`INSERT INTO "Entry" (id,"userId","walletId","itemId",amount,date,status,key) VALUES (${newEntry},${user},${wallets[0].id},${item},100,'2026-01-01','DONE','with-creation-time')`;
         expect(
@@ -1212,4 +1222,297 @@ suite(
     expect(["invite_race_a", "invite_race_b"]).toContain(activated.username);
   },
   20000,
+);
+
+suite(
+  "rozpočty, deset měn, obchodníci, design a obnova s oddělením uživatelů",
+  async () => {
+    const password = "test-password-12345",
+      owner = await db.user.findFirst({ where: { role: "OWNER" } });
+    const admin = request.agent(app).set("X-Forwarded-For", "198.51.100.101");
+    await admin
+      .post("/api/auth/login")
+      .set("Origin", origin)
+      .send({ username: owner.username, password })
+      .expect(200);
+    async function createUser(username: string, ip: string) {
+      const invite = (
+        await admin
+          .post("/api/admin/invites")
+          .set("Origin", origin)
+          .send({})
+          .expect(200)
+      ).body.invite;
+      const agent = request.agent(app).set("X-Forwarded-For", ip);
+      await agent
+        .post("/api/auth/register")
+        .set("Origin", origin)
+        .send({ username, password, invite })
+        .expect(201);
+      await agent
+        .post("/api/auth/login")
+        .set("Origin", origin)
+        .send({ username, password })
+        .expect(200);
+      return agent;
+    }
+    const a = await createUser("currencies_user", "198.51.100.102"),
+      b = await createUser("currencies_restore", "198.51.100.103");
+    const main = (await a.get("/api/data")).body.wallets[0];
+    const wallets: any[] = [main];
+    for (const currency of [
+      "EUR",
+      "USD",
+      "GBP",
+      "CHF",
+      "PLN",
+      "HUF",
+      "SEK",
+      "NOK",
+      "DKK",
+    ]) {
+      const w = await a
+        .post("/api/wallets")
+        .set("Origin", origin)
+        .send({
+          name: currency,
+          kind: "BANK",
+          color: "#123456",
+          currency,
+          opening: "100.25",
+        })
+        .expect(201);
+      wallets.push(w.body);
+    }
+    const eur = wallets[1];
+    let data = (await a.get("/api/data")).body;
+    expect(data.balance).toBe("0");
+    expect(data.balancesByCurrency.EUR).toBe("10025");
+    expect(data.balancesByCurrency.USD).toBe("10025");
+    await a
+      .patch("/api/wallets/" + eur.id)
+      .set("Origin", origin)
+      .send({ ...eur, currency: "USD", opening: "100.25" })
+      .expect(400);
+    const category = (
+      await a
+        .post("/api/items")
+        .set("Origin", origin)
+        .send({ name: "Nákupy", kind: "EXPENSE", color: "#123456" })
+        .expect(200)
+    ).body;
+    const entry = {
+      walletId: eur.id,
+      itemId: category.id,
+      date: "2026-11-10",
+      amount: "30.10",
+      merchant: "Action",
+      key: randomUUID(),
+    };
+    const payment = (
+      await a.post("/api/entries").set("Origin", origin).send(entry).expect(200)
+    ).body;
+    await a
+      .patch("/api/entries/" + payment.id)
+      .set("Origin", origin)
+      .send({ ...entry, walletId: main.id })
+      .expect(400);
+    const budget = {
+      amount: "50",
+      paymentLimit: "20",
+      period: "MONTHLY",
+      warningPercent: 80,
+      enabled: true,
+    };
+    await a
+      .put("/api/wallets/" + eur.id + "/budget")
+      .set("Origin", origin)
+      .send(budget)
+      .expect(200);
+    await a
+      .put("/api/wallets/" + eur.id + "/budget")
+      .set("Origin", origin)
+      .send({ ...budget, amount: "0" })
+      .expect(400);
+    await a
+      .put("/api/wallets/" + eur.id + "/budget")
+      .set("Origin", origin)
+      .send({ ...budget, warningPercent: 101 })
+      .expect(400);
+    await a
+      .put("/api/wallets/" + eur.id + "/budget")
+      .send(budget)
+      .expect(403);
+    for (const stranger of [admin, b]) {
+      await stranger
+        .put("/api/wallets/" + eur.id + "/budget")
+        .set("Origin", origin)
+        .send(budget)
+        .expect(404);
+      await stranger
+        .delete("/api/wallets/" + eur.id + "/budget")
+        .set("Origin", origin)
+        .expect(404);
+      expect((await stranger.get("/api/data")).body.budgets).not.toContainEqual(
+        expect.objectContaining({ walletId: eur.id }),
+      );
+    }
+    const transfer = {
+      fromId: main.id,
+      toId: eur.id,
+      amount: "2500",
+      receivedAmount: "100",
+      date: "2026-11-10",
+      key: randomUUID(),
+    };
+    await a
+      .post("/api/transfers")
+      .set("Origin", origin)
+      .send({ ...transfer, receivedAmount: undefined })
+      .expect(400);
+    const writes = await Promise.all(
+      [1, 2].map(() =>
+        a
+          .post("/api/transfers")
+          .set("Origin", origin)
+          .send(transfer)
+          .expect(200),
+      ),
+    );
+    expect(writes[0].body.id).toBe(writes[1].body.id);
+    await a
+      .post("/api/transfers")
+      .set("Origin", origin)
+      .send({ ...transfer, receivedAmount: "101" })
+      .expect(409);
+    data = (await a.get("/api/data")).body;
+    expect(data.balancesByCurrency.CZK).toBe("-250000");
+    expect(data.balancesByCurrency.EUR).toBe("17015");
+    expect(data.entries[0].merchant).toBe("Action");
+    expect(data.budgets[0].amount).toBe("5000");
+    const series = (
+      await a
+        .post("/api/series")
+        .set("Origin", origin)
+        .send({
+          walletId: eur.id,
+          itemId: category.id,
+          amount: "1",
+          start: "2026-11-20",
+          frequency: "MONTHLY",
+          interval: 1,
+          count: 1,
+          merchant: "Lidl",
+        })
+        .expect(200)
+    ).body;
+    await a
+      .post("/api/series/generate")
+      .set("Origin", origin)
+      .send({ horizon: "2026-11-30" })
+      .expect(200);
+    expect(
+      (await a.get("/api/data")).body.entries.find(
+        (e: any) => e.seriesId === series.id,
+      ).merchant,
+    ).toBe("Lidl");
+    const action = (
+      await a
+        .post("/api/quick-actions")
+        .set("Origin", origin)
+        .send({
+          walletId: eur.id,
+          itemId: category.id,
+          name: "Káva EUR",
+          amount: "2",
+          merchant: "Kavárna",
+          mode: "DIRECT",
+        })
+        .expect(200)
+    ).body;
+    const device = (
+      await a
+        .post("/api/widget-devices")
+        .set("Origin", origin)
+        .send({ name: "Test EUR", password, showBalance: true })
+        .expect(200)
+    ).body;
+    const snapshot = (
+      await request(app)
+        .get("/api/widget/snapshot")
+        .set("Authorization", "Bearer " + device.token)
+        .expect(200)
+    ).body;
+    expect(snapshot.balance).toBe("-250000");
+    expect(snapshot.currency).toBe("CZK");
+    expect(snapshot.actions[0].currency).toBe("EUR");
+    await request(app)
+      .post("/api/widget/actions/" + action.id)
+      .set("Authorization", "Bearer " + device.token)
+      .send({ requestId: randomUUID() })
+      .expect(200);
+    expect(
+      (await a.get("/api/data")).body.entries.find(
+        (e: any) => e.merchant === "Kavárna",
+      ).amount,
+    ).toBe("200");
+    const { defaultDesign } = await import("../apps/shared/design");
+    const design = {
+      ...defaultDesign,
+      theme: "dark",
+      accent: "#7655c6",
+      showChart: false,
+    };
+    await a
+      .put("/api/preferences/design")
+      .set("Origin", origin)
+      .send({ ...design, accent: "url(javascript:alert(1))" })
+      .expect(400);
+    await a
+      .put("/api/preferences/design")
+      .set("Origin", origin)
+      .send(design)
+      .expect(200);
+    await a
+      .put("/api/preferences")
+      .set("Origin", origin)
+      .send({ incomeMode: "grid" })
+      .expect(200);
+    expect((await a.get("/api/data")).body.user.preferences).toMatchObject({
+      incomeMode: "grid",
+      design,
+    });
+    expect(
+      (await b.get("/api/data")).body.user.preferences?.design,
+    ).toBeUndefined();
+    const backup = (await a.get("/api/backup")).body;
+    expect(backup.version).toBe(3);
+    await b
+      .post("/api/restore")
+      .set("Origin", origin)
+      .send({
+        ...backup,
+        transfers: backup.transfers.map((t: any) => ({
+          ...t,
+          receivedAmount: null,
+        })),
+      })
+      .expect(400);
+    await b.post("/api/restore").set("Origin", origin).send(backup).expect(200);
+    const restored = (await b.get("/api/data")).body;
+    expect(restored.balancesByCurrency).toEqual(
+      (await a.get("/api/data")).body.balancesByCurrency,
+    );
+    expect(restored.budgets[0].amount).toBe("5000");
+    expect(restored.budgets[0].walletId).not.toBe(eur.id);
+    expect(restored.entries.some((e: any) => e.merchant === "Action")).toBe(
+      true,
+    );
+    await a
+      .delete("/api/wallets/" + eur.id + "/budget")
+      .set("Origin", origin)
+      .expect(200);
+    expect((await a.get("/api/data")).body.budgets).toHaveLength(0);
+  },
+  30000,
 );

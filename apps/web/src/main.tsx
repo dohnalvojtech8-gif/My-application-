@@ -1,5 +1,9 @@
+import { currencies, currencySymbol } from "../../shared/currencies";
+import { defaultDesign } from "../../shared/design";
+import { applyDesign } from "./DesignSettings";
+import { BudgetCards } from "./Budgets";
 import {
-  money,
+  money as formatMoney,
   sum,
   net,
   today,
@@ -33,6 +37,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip } from "recharts";
 import "./style.css";
+import "./themes.css";
 async function api(
   path: string,
   body?: unknown,
@@ -61,6 +66,8 @@ type Data = {
   items: Item[];
   entries: Entry[];
   balance: string;
+  balancesByCurrency: Record<string, string>;
+  budgets: any[];
   wallets: FinancialWallet[];
   transfers: any[];
   series: any[];
@@ -71,6 +78,8 @@ function App() {
     [error, setError] = useState(""),
     [page, setPage] = useState(0),
     [walletId, setWalletId] = useState("ALL"),
+    [displayCurrency, setDisplayCurrency] = useState("CZK"),
+    [formWalletId, setFormWalletId] = useState(""),
     [focusSeries, setFocusSeries] = useState(false),
     [deleteEntry, setDeleteEntry] = useState(false),
     [confirmDate, setConfirmDate] = useState(day()),
@@ -156,6 +165,28 @@ function App() {
       })
       .catch((e) => setError(e.message));
   }, [!!data]);
+  useEffect(() => {
+    const design = data?.user.preferences?.design;
+    applyDesign(design);
+    const media = matchMedia("(prefers-color-scheme: dark)"),
+      change = () => applyDesign(design);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, [JSON.stringify(data?.user.preferences?.design)]);
+  useEffect(() => {
+    if (!form || !data) return;
+    const preferred =
+      editingEntry?.walletId ||
+      quickPreset?.walletId ||
+      (walletId !== "ALL" ? walletId : "");
+    setFormWalletId(
+      preferred ||
+        data.wallets.find((w) => !w.archived && w.currency === displayCurrency)
+          ?.id ||
+        data.wallets.find((w) => w.isDefault)?.id ||
+        "",
+    );
+  }, [form, editingEntry?.id, quickPreset?.id, !!data]);
   const submitKey = useRef(crypto.randomUUID());
   useEffect(() => {
     if (!form) return;
@@ -373,15 +404,26 @@ function App() {
       </main>
     );
   const wallets = data.wallets || [];
+  const currency =
+    wallets.find((w) => w.id === walletId)?.currency || displayCurrency;
+  const money = (v: string | bigint | number) => formatMoney(v, currency);
+  const currencyWallets = wallets.filter((w) => w.currency === currency);
+  const design = { ...defaultDesign, ...data.user.preferences?.design };
+  const formCurrency =
+    wallets.find((w) => w.id === formWalletId)?.currency || currency;
   const selectedWallet = wallets.some((w) => w.id === walletId)
     ? walletId
     : "ALL";
   const scopedEntries = data.entries
-    .filter((e) => selectedWallet === "ALL" || e.walletId === selectedWallet)
+    .filter(
+      (e) =>
+        currencyWallets.some((w) => w.id === e.walletId) &&
+        (selectedWallet === "ALL" || e.walletId === selectedWallet),
+    )
     .sort(newestFirst);
   const scopedBalance =
     selectedWallet === "ALL"
-      ? data.balance
+      ? data.balancesByCurrency?.[currency] || "0"
       : wallets.find((w) => w.id === selectedWallet)!.balance;
   const entries = scopedEntries.filter(
     (e) => e.date === date && e.status !== "SKIPPED",
@@ -491,20 +533,41 @@ function App() {
               Zobrazený finanční účet
               <select
                 value={selectedWallet}
-                onChange={(e) => setWalletId(e.target.value)}
+                onChange={(e) => {
+                  setWalletId(e.target.value);
+                  const w = wallets.find((w) => w.id === e.target.value);
+                  if (w) setDisplayCurrency(w.currency);
+                }}
               >
-                <option value="ALL">Všechny účty · společný přehled</option>
+                <option value="ALL">Všechny účty ve zvolené měně</option>
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.name}
+                    {w.name} · {w.currency}
                     {w.archived ? " (archivovaný)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Měna přehledu
+              <select
+                aria-label="Měna přehledu"
+                value={currency}
+                onChange={(e) => {
+                  setDisplayCurrency(e.target.value);
+                  setWalletId("ALL");
+                }}
+              >
+                {currencies.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code}
                   </option>
                 ))}
               </select>
             </label>
             <span>
               {selectedWallet === "ALL"
-                ? wallets.length + " účtů"
+                ? currencyWallets.length + " účtů"
                 : wallets.find((w) => w.id === selectedWallet)?.name}
               <b>{money(scopedBalance)}</b>
             </span>
@@ -561,12 +624,94 @@ function App() {
                     {<Minus size={21} />} VÝDAJ
                   </button>
                 </div>
-                {page === 0 && <DashboardChart entries={scopedEntries} />}
+                {page === 0 && (
+                  <div className="dashboard-overview">
+                    {design.showBudgets && (
+                      <div>
+                        <div className="chart-heading">
+                          <h2>Rozpočty pod kontrolou</h2>
+                          <button
+                            onClick={() => {
+                              setPage(3);
+                              setTimeout(() => {
+                                const el = document.getElementById(
+                                  "budget-settings",
+                                ) as HTMLDetailsElement;
+                                if (el) {
+                                  el.open = true;
+                                  el.scrollIntoView({ block: "start" });
+                                }
+                              }, 0);
+                            }}
+                          >
+                            Nastavit
+                          </button>
+                        </div>
+                        <BudgetCards
+                          wallets={currencyWallets.filter(
+                            (w) =>
+                              selectedWallet === "ALL" ||
+                              w.id === selectedWallet,
+                          )}
+                          budgets={data.budgets || []}
+                          entries={scopedEntries}
+                        />
+                      </div>
+                    )}
+                    {design.showUpcoming && (
+                      <article className="upcoming-card">
+                        <span className="eyebrow">CO VÁS ČEKÁ</span>
+                        <h2>Nejbližší plánované platby</h2>
+                        {!scopedEntries.some((e) => e.status === "PLANNED") && (
+                          <p>Žádné čekající platby. Vše máte pod kontrolou.</p>
+                        )}
+                        {scopedEntries
+                          .filter((e) => e.status === "PLANNED")
+                          .sort((a, b) => a.date.localeCompare(b.date))
+                          .slice(0, 5)
+                          .map((e) => (
+                            <button
+                              className="insight-payment"
+                              key={e.id}
+                              onClick={() => {
+                                setEditingEntry(e);
+                                setQuickPreset(null);
+                                setForm(e.item.kind);
+                              }}
+                            >
+                              <span>
+                                <b>{e.item.name}</b>
+                                <small>
+                                  {e.date}{" "}
+                                  {e.date < today() ? "· po termínu" : ""}
+                                  {e.merchant ? " · " + e.merchant : ""}
+                                </small>
+                              </span>
+                              <b
+                                className={
+                                  e.item.kind === "INCOME"
+                                    ? "positive"
+                                    : "negative"
+                                }
+                              >
+                                {e.item.kind === "INCOME" ? "+" : "−"}
+                                {money(e.amount)}
+                              </b>
+                            </button>
+                          ))}
+                      </article>
+                    )}
+                  </div>
+                )}
+                {page === 0 && design.showChart && (
+                  <DashboardChart entries={scopedEntries} currency={currency} />
+                )}
               </>
             )}
             {page === 2 ? (
               <Analytics
                 data={data}
+                currency={currency}
                 period={period}
                 setPeriod={setPeriod}
                 walletId={selectedWallet}
@@ -699,6 +844,7 @@ function App() {
                       <strong>{e.item.name}</strong>
                       <small>
                         {e.status === "DONE" ? "Uskutečněno" : "Plánováno"} ·{" "}
+                        {e.merchant ? e.merchant + " · " : ""}
                         {e.comment} ·{" "}
                         {wallets.find((w) => w.id === e.walletId)?.name}
                       </small>
@@ -725,6 +871,9 @@ function App() {
                   .filter(
                     (t) =>
                       t.date === date &&
+                      currencyWallets.some(
+                        (w) => w.id === t.fromId || w.id === t.toId,
+                      ) &&
                       (selectedWallet === "ALL" ||
                         t.fromId === selectedWallet ||
                         t.toId === selectedWallet),
@@ -741,7 +890,17 @@ function App() {
                           Převod mezi vlastními účty · mimo příjmy a výdaje
                         </small>
                       </div>
-                      <b>{money(t.amount)}</b>
+                      <b>
+                        {formatMoney(
+                          t.amount,
+                          wallets.find((w) => w.id === t.fromId)?.currency,
+                        )}{" "}
+                        →{" "}
+                        {formatMoney(
+                          t.receivedAmount ?? t.amount,
+                          wallets.find((w) => w.id === t.toId)?.currency,
+                        )}
+                      </b>
                     </div>
                   ))}
               </article>
@@ -827,11 +986,8 @@ function App() {
             >
               <WalletSelect
                 wallets={wallets}
-                defaultValue={
-                  editingEntry?.walletId ||
-                  quickPreset?.walletId ||
-                  (selectedWallet === "ALL" ? undefined : selectedWallet)
-                }
+                value={formWalletId}
+                onChange={setFormWalletId}
                 include={editingEntry?.walletId}
               />
               <label>
@@ -914,7 +1070,7 @@ function App() {
                 <p>Nejprve vytvořte položku v Nastavení.</p>
               )}
               <label>
-                Částka (Kč)
+                Částka ({formCurrency})
                 <input
                   name="amount"
                   inputMode="decimal"
@@ -949,11 +1105,31 @@ function App() {
                         if (input) input.value = a;
                       }}
                     >
-                      {a} Kč
+                      {a} {currencySymbol(formCurrency)}
                     </button>
                   ))}
                 </div>
               )}
+              <label>
+                Obchodník (nepovinné)
+                <input
+                  name="merchant"
+                  maxLength={120}
+                  list="merchant-choices"
+                  defaultValue={
+                    editingEntry?.merchant || quickPreset?.merchant || ""
+                  }
+                />
+                <datalist id="merchant-choices">
+                  {[
+                    ...new Set(
+                      data.entries.map((e) => e.merchant).filter(Boolean),
+                    ),
+                  ].map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </label>
               <label>
                 Komentář
                 <input

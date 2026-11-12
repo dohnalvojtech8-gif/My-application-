@@ -1,3 +1,4 @@
+import { money } from "../../shared/finance";
 import { useEffect, useState } from "react";
 import { call } from "./Settings";
 type Panel = {
@@ -93,7 +94,7 @@ export function WidgetPanelSettings({
                     )
                     .map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.name} · {Number(a.amount) / 100} Kč
+                        {a.name} · {money(a.amount, a.currency)}
                       </option>
                     ))}
                 </select>
@@ -139,7 +140,7 @@ export function WidgetPanelSettings({
                     <br />
                     {a?.name || "Volné"}
                     <br />
-                    {a ? `${Number(a.amount) / 100} Kč` : "—"}
+                    {a ? `${money(a.amount, a.currency)}` : "—"}
                   </div>
                 );
               })}

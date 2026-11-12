@@ -17,6 +17,7 @@ model User {
  bankAccounts BankAccount[]
  bankTransactions BankTransaction[]
  wallets Wallet[]
+ budgets Budget[]
  transfers Transfer[]
  widgetPanel Json @default("{}")
  quickActions QuickAction[]
@@ -79,6 +80,7 @@ model Entry {
  wallet Wallet @relation(fields:[walletId,userId],references:[id,userId],onDelete:NoAction)
  itemId String
  item Item @relation(fields: [itemId,userId], references: [id,userId])
+ merchant String @default("")
  amount BigInt
  date String
  status String
@@ -100,6 +102,7 @@ model Series {
  walletId String
  wallet Wallet @relation(fields:[walletId,userId],references:[id,userId],onDelete:NoAction)
  itemId String
+ merchant String @default("")
  amount BigInt
  start String
  end String?
@@ -145,6 +148,7 @@ model QuickAction {
  wallet Wallet @relation(fields:[walletId,userId],references:[id,userId],onDelete:NoAction)
  itemId String
  name String
+ merchant String @default("")
  amount BigInt
  mode String @default("FORM")
  showBalance Boolean @default(false)
@@ -235,6 +239,7 @@ model Wallet {
  isDefault Boolean @default(false)
  archived Boolean @default(false)
  createdAt DateTime @default(now())
+ budget Budget?
  entries Entry[]
  series Series[]
  quickActions QuickAction[]
@@ -252,6 +257,7 @@ model Transfer {
  from Wallet @relation("TransferFrom",fields:[fromId,userId],references:[id,userId],onDelete:NoAction)
  toId String
  to Wallet @relation("TransferTo",fields:[toId,userId],references:[id,userId],onDelete:NoAction)
+ receivedAmount BigInt?
  amount BigInt
  date String
  comment String @default("")
@@ -261,4 +267,20 @@ model Transfer {
  @@index([userId,date])
  @@index([fromId,userId])
  @@index([toId,userId])
+}
+
+model Budget {
+  id             String  @id @default(uuid())
+  userId         String
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId       String  @unique
+  wallet         Wallet  @relation(fields: [walletId, userId], references: [id, userId], onDelete: NoAction)
+  amount         BigInt?
+  paymentLimit   BigInt?
+  period         String  @default("MONTHLY")
+  warningPercent Int     @default(80)
+  enabled        Boolean @default(true)
+
+  @@unique([walletId, userId])
+  @@index([userId])
 }

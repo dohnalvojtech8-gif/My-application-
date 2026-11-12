@@ -1,3 +1,4 @@
+import { currencyCodes } from "../shared/currencies.js";
 import type { Express } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
@@ -41,6 +42,7 @@ const entry = z.object({
     .optional()
     .transform((value) => (value ? new Date(value) : null)),
   status: z.enum(["PLANNED", "DONE", "SKIPPED"]),
+  merchant: z.string().trim().max(120).default(""),
   comment: z.string().max(1000).default(""),
   seriesId: z.string().uuid().nullable().optional(),
   occurrence: z.number().int().min(0).nullable().optional(),
@@ -58,7 +60,7 @@ const wallet = z.object({
   name: z.string().min(1).max(60),
   kind: z.enum(["BANK", "CASH", "SAVINGS", "OTHER"]),
   color: hex,
-  currency: z.literal("CZK"),
+  currency: z.enum(currencyCodes),
   opening,
   isDefault: z.boolean(),
   archived: z.boolean(),
@@ -74,9 +76,14 @@ const series = z.object({
   frequency: z.enum(["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]),
   interval: z.number().int().min(1).max(365),
   paused: z.boolean(),
+  merchant: z.string().trim().max(120).default(""),
   comment: z.string().max(1000),
 });
 const transfer = z.object({
+  receivedAmount: amount
+    .refine((n) => n > 0n)
+    .nullable()
+    .optional(),
   fromId: z.string().uuid(),
   toId: z.string().uuid(),
   createdAt: z
@@ -98,11 +105,27 @@ export function installRestore(app: Express, db: PrismaClient) {
             wallets: undefined,
             transfers: undefined,
             series: undefined,
+            budgets: undefined,
           }
         : q.body;
     const v = z
       .object({
-        version: z.union([z.literal(1), z.literal(2)]),
+        version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+        budgets: z
+          .array(
+            z
+              .object({
+                walletId: z.string().uuid(),
+                amount: amount.refine((n) => n > 0n).nullable(),
+                paymentLimit: amount.refine((n) => n > 0n).nullable(),
+                period: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
+                warningPercent: z.number().int().min(1).max(100),
+                enabled: z.boolean(),
+              })
+              .refine((b) => b.amount != null || b.paymentLimit != null),
+          )
+          .max(50)
+          .optional(),
         opening,
         items: z.array(item).max(1000),
         entries: z.array(entry).max(10000),
@@ -115,10 +138,23 @@ export function installRestore(app: Express, db: PrismaClient) {
       itemIds = new Set(v.items.map((i) => i.id)),
       walletIds = new Set(v.wallets?.map((w) => w.id)),
       seriesIds = new Set(v.series?.map((s) => s.id));
+    const invalidBudget =
+      (v.budgets || []).some((b) => !walletIds.has(b.walletId)) ||
+      new Set((v.budgets || []).map((b) => b.walletId)).size !==
+        (v.budgets || []).length;
+    const invalidExchange = (v.transfers || []).some((t) => {
+      const from = v.wallets?.find((w) => w.id === t.fromId),
+        to = v.wallets?.find((w) => w.id === t.toId);
+      return from?.currency === to?.currency
+        ? t.receivedAmount != null && t.receivedAmount !== t.amount
+        : t.receivedAmount == null;
+    });
     if (
+      invalidBudget ||
+      invalidExchange ||
       itemIds.size !== v.items.length ||
       v.entries.some((e) => !itemIds.has(e.itemId)) ||
-      (v.version === 2 &&
+      (v.version >= 2 &&
         (!v.wallets?.length ||
           walletIds.size !== v.wallets.length ||
           v.wallets.filter((w) => w.isDefault && !w.archived).length !== 1 ||
@@ -156,12 +192,13 @@ export function installRestore(app: Express, db: PrismaClient) {
           (await tx.item.count({ where: { userId } })) ||
           (await tx.transfer.count({ where: { userId } })) ||
           (await tx.series.count({ where: { userId } })) ||
+          (await tx.budget.count({ where: { userId } })) ||
           (await tx.wallet.count({ where: { userId } })) !== 1 ||
           main.opening !== 0n
         )
           throw Error("Obnovu lze provést pouze do prázdného účtu");
         const wallets = new Map<string, string>();
-        if (v.version === 2) {
+        if (v.version >= 2) {
           for (const w of v.wallets!) {
             const { id, ...data } = w;
             const created = w.isDefault
@@ -193,7 +230,7 @@ export function installRestore(app: Express, db: PrismaClient) {
             (await tx.item.create({ data: { ...data, userId } })).id,
           );
         }
-        if (v.version === 2)
+        if (v.version >= 2)
           for (const s of v.series || []) {
             const { id, ...data } = s;
             seriesMap.set(
@@ -217,7 +254,7 @@ export function installRestore(app: Express, db: PrismaClient) {
               ...e,
               itemSnapshot: e.itemSnapshot || undefined,
               userId,
-              walletId: v.version === 2 ? wallets.get(e.walletId!)! : main.id,
+              walletId: v.version >= 2 ? wallets.get(e.walletId!)! : main.id,
               itemId: items.get(e.itemId)!,
               seriesId: seriesId || null,
               occurrence: seriesId ? e.occurrence : null,
@@ -227,7 +264,15 @@ export function installRestore(app: Express, db: PrismaClient) {
             };
           }),
         });
-        if (v.version === 2 && v.transfers?.length)
+        if (v.budgets?.length)
+          await tx.budget.createMany({
+            data: v.budgets.map((b) => ({
+              ...b,
+              userId,
+              walletId: wallets.get(b.walletId)!,
+            })),
+          });
+        if (v.version >= 2 && v.transfers?.length)
           await tx.transfer.createMany({
             data: v.transfers.map((t) => ({
               ...t,

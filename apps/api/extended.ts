@@ -1,10 +1,43 @@
-import { walletFor, lockLedger } from "./wallets.js";
+import { walletFor, lockLedger, FinanceError } from "./wallets.js";
 import type { Express } from "express";
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import argon2 from "argon2";
 import { cents } from "./money.js";
 import { occurrence } from "./recurrence.js";
+const designSchema = z.object({
+  theme: z.enum(["light", "dark", "system"]),
+  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  sidebar: z.enum(["navy", "teal", "plum"]),
+  radius: z.enum(["round", "soft", "square"]),
+  density: z.enum(["comfortable", "compact"]),
+  fontSize: z.union([
+    z.literal(90),
+    z.literal(100),
+    z.literal(110),
+    z.literal(120),
+  ]),
+  reducedMotion: z.boolean(),
+  showChart: z.boolean(),
+  showBudgets: z.boolean(),
+  showUpcoming: z.boolean(),
+});
+async function mergePreferences(
+  db: PrismaClient,
+  userId: string,
+  patch: object,
+) {
+  return db.$transaction(async (tx) => {
+    await lockLedger(tx, userId);
+    const u = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+    const next = { ...((u.preferences as object) || {}), ...patch };
+    await tx.user.update({
+      where: { id: userId },
+      data: { preferences: next },
+    });
+    return next;
+  });
+}
 const preferences = z.object({
   incomeMode: z.enum(["list", "grid"]).default("list"),
   expenseMode: z.enum(["list", "grid"]).default("grid"),
@@ -18,6 +51,7 @@ const preferences = z.object({
   notifications: z.boolean().default(false),
 });
 const seriesSchema = z.object({
+  merchant: z.string().trim().max(120).default(""),
   walletId: z.string().uuid().optional(),
   itemId: z.string().uuid(),
   amount: z.string().refine((v) => {
@@ -67,6 +101,7 @@ export async function generate(
             date,
             status: "PLANNED",
             comment: s.comment,
+            merchant: s.merchant,
             key: `series:${s.id}:${i}`,
             seriesId: s.id,
             occurrence: i,
@@ -82,12 +117,13 @@ export async function generate(
 export function installExtended(app: Express, db: PrismaClient) {
   app.put("/api/preferences", async (q, r) => {
     const v = preferences.parse(q.body);
-    await db.user.update({
-      where: { id: r.locals.user.id },
-      data: { preferences: v },
-    });
-    r.json(v);
+    r.json(await mergePreferences(db, r.locals.user.id, v));
   });
+  app.put("/api/preferences/design", async (q, r) => {
+    const design = designSchema.parse(q.body);
+    r.json(await mergePreferences(db, r.locals.user.id, { design }));
+  });
+
   app.post("/api/password", async (q, r) => {
     const v = z
       .object({
@@ -148,6 +184,12 @@ export function installExtended(app: Express, db: PrismaClient) {
       await lockLedger(tx, userId);
       const old = await tx.series.findFirstOrThrow({ where: { id, userId } });
       const w = await walletFor(tx, userId, v.walletId || old.walletId);
+      const originalWallet = await walletFor(tx, userId, old.walletId, true);
+      if (originalWallet.currency !== w.currency)
+        throw new FinanceError(
+          400,
+          "Sérii nelze přesunout do jiné měny. Vytvořte novou sérii.",
+        );
       await tx.series.update({
         where: { id },
         data: { ...v, walletId: w.id, amount: cents(v.amount) },
@@ -250,21 +292,23 @@ export function installExtended(app: Express, db: PrismaClient) {
   });
   app.get("/api/backup", async (_q, r) => {
     const userId = r.locals.user.id;
-    const [items, entries, series, wallets, transfers] = await db.$transaction(
-      [
-        db.item.findMany({ where: { userId } }),
-        db.entry.findMany({ where: { userId } }),
-        db.series.findMany({ where: { userId } }),
-        db.wallet.findMany({ where: { userId } }),
-        db.transfer.findMany({ where: { userId } }),
-      ],
-      { isolationLevel: "RepeatableRead" },
-    );
+    const [items, entries, series, wallets, transfers, budgets] =
+      await db.$transaction(
+        [
+          db.item.findMany({ where: { userId } }),
+          db.entry.findMany({ where: { userId } }),
+          db.series.findMany({ where: { userId } }),
+          db.wallet.findMany({ where: { userId } }),
+          db.transfer.findMany({ where: { userId } }),
+          db.budget.findMany({ where: { userId } }),
+        ],
+        { isolationLevel: "RepeatableRead" },
+      );
     r.set(
       "Content-Disposition",
       'attachment; filename="systematic-money-backup.json"',
     ).json({
-      version: 2,
+      version: 3,
       exportedAt: new Date(),
       opening: r.locals.user.opening,
       preferences: r.locals.user.preferences,
@@ -273,6 +317,7 @@ export function installExtended(app: Express, db: PrismaClient) {
       series,
       wallets,
       transfers,
+      budgets,
     });
   });
 }

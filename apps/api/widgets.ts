@@ -1,13 +1,14 @@
-import { walletFor, lockLedger } from "./wallets.js";
+import { walletFor, lockLedger, ledger } from "./wallets.js";
 import { Router, type Express } from "express";
 import rateLimit from "express-rate-limit";
 import { PrismaClient } from "@prisma/client";
 import { randomBytes, createHash } from "node:crypto";
 import { z } from "zod";
-import { cents, balance } from "./money.js";
+import { cents } from "./money.js";
 const digest = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 const preset = z.object({
+  merchant: z.string().trim().max(120).default(""),
   walletId: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(50),
   itemId: z.string().uuid(),
@@ -64,6 +65,7 @@ export function widgetRouter(db: PrismaClient) {
     const actions = await db.quickAction.findMany({
       where: { userId: d.userId, wallet: { archived: false } },
       orderBy: { createdAt: "asc" },
+      include: { wallet: true },
     });
     const items = await db.item.findMany({
       where: { userId: d.userId, deletedAt: null, hidden: false },
@@ -79,6 +81,8 @@ export function widgetRouter(db: PrismaClient) {
               walletId: a.walletId,
               kind: i.kind,
               amount: a.amount.toString(),
+              currency: a.wallet.currency,
+              merchant: a.merchant,
               mode: a.mode,
               showBalance: a.showBalance,
               color: i.color,
@@ -89,17 +93,7 @@ export function widgetRouter(db: PrismaClient) {
     const totalBalance = d.showBalance
       ? await db.$transaction(
           async (tx) => {
-            const wallets = await tx.wallet.findMany({
-              where: { userId: d.userId },
-            });
-            const entries = await tx.entry.findMany({
-              where: { userId: d.userId, status: "DONE" },
-              include: { item: true },
-            });
-            return balance(
-              wallets.reduce((n, w) => n + w.opening, 0n),
-              entries,
-            ).toString();
+            return (await ledger(tx, d.userId)).balance.toString();
           },
           { isolationLevel: "RepeatableRead" },
         )
@@ -120,6 +114,7 @@ export function widgetRouter(db: PrismaClient) {
         incomes: resolveSlots(panel.incomes, "INCOME"),
       },
       balance: totalBalance,
+      currency: "CZK",
       actions: available,
       updatedAt: new Date().toISOString(),
     });
@@ -159,6 +154,7 @@ export function widgetRouter(db: PrismaClient) {
             }).format(new Date()),
             status: "DONE",
             comment: "Widget · " + action.name,
+            merchant: action.merchant,
             key,
             itemSnapshot: {
               name: item.name,

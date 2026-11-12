@@ -26,11 +26,11 @@ test("účty a převod propojí dashboard, přehledy a kalendář bez změny cel
     .click();
   await dialog
     .getByLabel("Z účtu", { exact: true })
-    .selectOption({ label: name });
+    .selectOption({ label: name + " · CZK" });
   await dialog
     .getByLabel("Na účet", { exact: true })
-    .selectOption({ label: "Osobní účet" });
-  await dialog.getByLabel("Částka převodu (Kč)").fill("100.15");
+    .selectOption({ label: "Osobní účet · CZK" });
+  await dialog.getByLabel("Částka převodu (CZK)").fill("100.15");
   await dialog.getByRole("button", { name: "Provést převod" }).click();
   await expect(dialog).toHaveCount(0);
   const after = await (await page.request.get("/api/data")).json();

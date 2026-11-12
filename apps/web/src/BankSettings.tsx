@@ -1,3 +1,4 @@
+import { money } from "../../shared/finance";
 import { WalletSelect } from "./Wallets";
 import { useEffect, useState } from "react";
 import { call } from "./Settings";
@@ -28,6 +29,7 @@ export function BankSettings({
     [search, setSearch] = useState(""),
     [rows, setRows] = useState<any[]>([]),
     [filter, setFilter] = useState("NEW"),
+    [targets, setTargets] = useState<Record<string, string>>({}),
     [next, setNext] = useState<string | null>(null),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
@@ -58,6 +60,12 @@ export function BankSettings({
       setBusy(false);
     }
   }
+  const targetId = (t: any) =>
+    targets[t.id] ||
+    t.account.walletId ||
+    data.wallets.find((w: any) => w.isDefault)?.id;
+  const targetCurrency = (t: any) =>
+    data.wallets.find((w: any) => w.id === targetId(t))?.currency || "CZK";
   return (
     <details className="settings-group">
       <summary>
@@ -289,7 +297,7 @@ export function BankSettings({
                       ...v,
                       itemId: v.itemId || undefined,
                       entryId: v.entryId || undefined,
-                      czkAmount: v.czkAmount || undefined,
+                      convertedAmount: v.convertedAmount || undefined,
                       confirmUncertain: v.confirmUncertain === "on",
                     }),
                   );
@@ -297,7 +305,8 @@ export function BankSettings({
               >
                 <WalletSelect
                   wallets={data.wallets || []}
-                  defaultValue={t.account.walletId || undefined}
+                  value={targetId(t)}
+                  onChange={(id) => setTargets({ ...targets, [t.id]: id })}
                   label="Cílový účet importu"
                 />
                 <label>
@@ -313,16 +322,24 @@ export function BankSettings({
                       ))}
                   </select>
                 </label>
-                {t.currency !== "CZK" && (
+                {t.currency !== targetCurrency(t) && (
                   <label>
-                    Částka pro evidenci v Kč
+                    Částka pro evidenci v {targetCurrency(t)}
                     <input
-                      name="czkAmount"
+                      name="convertedAmount"
                       inputMode="decimal"
-                      placeholder="Zadejte skutečnou korunovou hodnotu"
+                      placeholder="Zadejte skutečnou hodnotu v cílové měně"
                     />
                   </label>
                 )}
+                <label>
+                  Obchodník z bankovní platby
+                  <input
+                    name="merchant"
+                    maxLength={120}
+                    placeholder="Volitelné jméno obchodníka"
+                  />
+                </label>
                 <label>
                   Již zadaná platba
                   <select name="entryId">
@@ -332,12 +349,19 @@ export function BankSettings({
                     {data.entries
                       .filter(
                         (e: any) =>
-                          e.status === "DONE" && e.item.kind === t.kind,
+                          e.status === "DONE" &&
+                          e.item.kind === t.kind &&
+                          e.walletId === targetId(t),
                       )
                       .slice(0, 500)
                       .map((e: any) => (
                         <option key={e.id} value={e.id}>
-                          {e.date} · {e.item.name} · {Number(e.amount) / 100} Kč
+                          {e.date} · {e.item.name} ·{" "}
+                          {money(
+                            e.amount,
+                            data.wallets.find((w: any) => w.id === e.walletId)
+                              ?.currency,
+                          )}
                         </option>
                       ))}
                   </select>

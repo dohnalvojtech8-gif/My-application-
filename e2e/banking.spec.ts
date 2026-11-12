@@ -22,7 +22,7 @@ test("bankovní přehled odděluje cizí měny a import vyžaduje kontrolu", asy
     .selectOption(
       before.items.find((i: any) => i.kind === "EXPENSE" && !i.hidden).id,
     );
-  await row.getByLabel("Částka pro evidenci v Kč").fill("500");
+  await row.getByLabel("Částka pro evidenci v CZK").fill("500");
   await row
     .getByRole("button", { name: "Přidat do evidence", exact: true })
     .click();

@@ -1,3 +1,4 @@
+import { installBudgets } from "./budgets.js";
 import { installInvites, normalizeInvite } from "./invites.js";
 import {
   installWallets,
@@ -282,6 +283,7 @@ app.delete("/api/items/:id", async (q, r) => {
   r.json({ ok: true });
 });
 const entrySchema = z.object({
+  merchant: z.string().trim().max(120).default(""),
   walletId: z.string().uuid().optional(),
   itemId: z.string().uuid(),
   amount: z.string().refine((v) => {
@@ -378,6 +380,12 @@ app.patch("/api/entries/:id", async (q, r) => {
         v.walletId || old.walletId,
         !v.walletId || v.walletId === old.walletId,
       );
+      const originalWallet = await walletFor(tx, userId, old.walletId, true);
+      if (w.currency !== originalWallet.currency)
+        throw new FinanceError(
+          400,
+          "Přesun platby mezi různými měnami není možný. Použijte převod mezi účty.",
+        );
       return tx.entry.updateMany({
         where: { id: old.id, userId },
         data: {
@@ -434,6 +442,7 @@ app.get("/api/events", async (_q, r) =>
   ),
 );
 installWallets(app, db);
+installBudgets(app, db);
 installBanking(app, db);
 installWidgetSettings(app, db);
 installExtended(app, db);

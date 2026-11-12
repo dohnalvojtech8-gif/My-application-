@@ -6,7 +6,13 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
-export function DashboardChart({ entries }: { entries: any[] }) {
+export function DashboardChart({
+  entries,
+  currency = "CZK",
+}: {
+  entries: any[];
+  currency?: string;
+}) {
   const months = Array.from({ length: 6 }, (_, i) => {
     const d = new Date();
     d.setDate(1);
@@ -70,7 +76,9 @@ export function DashboardChart({ entries }: { entries: any[] }) {
               tick={{ fill: "#8d9ca8", fontSize: 11 }}
             />
             <Tooltip
-              formatter={(v) => Number(v).toLocaleString("cs-CZ") + " Kč"}
+              formatter={(v) =>
+                Number(v).toLocaleString("cs-CZ") + " " + currency
+              }
               contentStyle={{
                 borderRadius: 14,
                 border: "1px solid #e5edf0",

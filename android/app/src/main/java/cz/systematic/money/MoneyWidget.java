@@ -53,8 +53,9 @@ public class MoneyWidget extends AppWidgetProvider {
         try { render(c,id,WidgetAPI.request(c,"/snapshot",null),"Ověření telefonu před uložením"); }
         catch(Exception e){render(c,id,null,"Obnovte připojení v aplikaci");}
     }
-    static String money(String cents) {
-        try{return new java.math.BigDecimal(cents).movePointLeft(2).stripTrailingZeros().toPlainString()+" Kč";}catch(Exception e){return "••••";}
+    static String money(String cents) { return money(cents,"CZK"); }
+    static String money(String cents,String currency) {
+        try{return new java.math.BigDecimal(cents).movePointLeft(2).stripTrailingZeros().toPlainString()+" "+(currency.equals("CZK")?"Kč":currency);}catch(Exception e){return "••••";}
     }
     static PendingIntent form(Context c,String query) {
         Intent open=new Intent(c,MainActivity.class).setAction(Intent.ACTION_VIEW)
@@ -63,14 +64,14 @@ public class MoneyWidget extends AppWidgetProvider {
     }
     static void bind(Context c,RemoteViews view,int viewId,JSONObject action) {
         if(action==null){view.setTextViewText(viewId,"—");view.setOnClickPendingIntent(viewId,null);return;}
-        view.setTextViewText(viewId,(action.optString("kind").equals("INCOME")?"+ ":"− ")+action.optString("name")+"\n"+money(action.optString("amount")));
+        view.setTextViewText(viewId,(action.optString("kind").equals("INCOME")?"+ ":"− ")+action.optString("name")+"\n"+money(action.optString("amount"),action.optString("currency","CZK")));
         view.setTextColor(viewId,android.graphics.Color.parseColor(action.optString("kind").equals("INCOME")?"#8DF2BB":"#FFB3C5"));
         if(!action.optString("mode").equals("DIRECT")) {view.setOnClickPendingIntent(viewId,form(c,"action="+action.optString("id")));return;}
         String actionId=action.optString("id"),request=nonce(c,actionId);
         Intent intent=new Intent(c,WidgetAuthActivity.class)
             .setData(Uri.parse("moneywidget://authenticate/"+actionId+"/"+request))
             .putExtra("actionId",actionId).putExtra("requestId",request)
-            .putExtra("label",action.optString("name")+" · "+money(action.optString("amount")));
+            .putExtra("label",action.optString("name")+" · "+money(action.optString("amount"),action.optString("currency","CZK")));
         view.setOnClickPendingIntent(viewId,PendingIntent.getActivity(c,0,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
     }
     static void render(Context c,int id,JSONObject snapshot,String message) {

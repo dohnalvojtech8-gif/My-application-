@@ -22,8 +22,10 @@ Pro vývoj backendu `npm run dev`; klient po změnách sestavte `npm run build`.
 - Session cookies HTTP-only/Secure v produkci, Argon2, atomická první registrace, jednorázové pozvánky, blokace účtů, změna hesla odhlašující sessions.
 - Oddělení financí na serveru; OWNER nemá administrátorský endpoint k cizím finančním datům. Složený databázový cizí klíč chrání vazbu platby a položky stejného uživatele.
 - Částky v haléřích přes BigInt; plánované platby nemění zůstatek a nikdy se automaticky nepotvrzují. Potvrzení dovoluje skutečné minulé/dnešní datum. Idempotentní vytvoření platby.
-- Více vlastních účtů (banka, hotovost, spoření), samostatné počáteční zůstatky a interní převody, které nenavyšují příjmy ani výdaje. Společný výběr účtu pro dashboard, kalendář a přehledy; evidence v CZK.
-- Analytické centrum: Souhrn, Položky, Trvalé platby, Transakce a Účty. Barevné grafy s procenty, vývoj zůstatku, TOP 5/10, průměry, maxima, porovnání období, vlastní rozsah, kombinované filtry, CSV a tisk/uložení PDF. [Podrobný návod](REPORTS.md).
+- Více vlastních účtů (banka, hotovost, spoření), samostatné počáteční zůstatky a interní převody, které nenavyšují příjmy ani výdaje. Společný výběr účtu pro dashboard, kalendář a přehledy; evidence v CZK, EUR, USD, GBP, CHF, PLN, HUF, SEK, NOK a DKK. Součty jsou oddělené podle měny.
+- Analytické centrum: Souhrn, Položky, Trvalé platby, Transakce, Účty a Rozšířené analýzy. Barevné grafy s procenty, vývoj zůstatku, TOP 5/10, průměry, maxima, porovnání období, vlastní rozsah, kombinované filtry, CSV a tisk/uložení PDF. [Podrobný návod](REPORTS.md).
+- Rozpočty a limity každého účtu: týden, měsíc nebo rok, vlastní práh upozornění, limit jedné platby, čerpání v čase a plánované výdaje. Filtr obchodníka, srovnání útrat u obchodníků a neobvyklé výdaje.
+- Přizpůsobení celé aplikace: světlý/tmavý/systémový motiv, vlastní akcent, boční panel, rohy karet, rozestupy, text, omezení animací a volitelné sekce dashboardu.
 - Položky s barvami, gradientem, ikonami, vybranými značkami Simple Icons, bezpečně překódovaným uploadem, oblíbením/skrytím/pořadím/důležitostí, výchozí částkou a živým náhledem.
 - Opakování den/týden/měsíc/rok, interval, konec/počet, pozastavení generování, úprava série/výskytu a přeskočení (smazání výskytu). Uskutečněné a přeskočené výskyty se znovu negenerují.
 - Preference, rychlé částky, seznam/mřížka, JSON export a obnova účtů, položek, transakcí, převodů a opakovaných sérií do prázdného účtu.
@@ -49,13 +51,13 @@ DATABASE_URL=postgresql://.../systematic_test npx playwright test
 
 Integrační test nejprve vyžaduje migrace v testovací DB. Playwright scénáře navazují na účty vytvořené integračním testem. CI připravuje vlastní PostgreSQL a spouští oba kroky.
 
-Lokálně ověřeno: TypeScript a produkční build, 16 jednotkových testů a 6 integračních scénářů na PostgreSQL (22 testů Vitest), 24 Playwright testů pro mobil/desktop. Aktuální výsledky jsou v GitHub Actions a STATUS.md. CI spouští stejné kontroly při každém pushi. Nejde o nezávislý bezpečnostní audit.
+Lokálně ověřeno: TypeScript a produkční build, 20 jednotkových testů a 7 integračních scénářů na PostgreSQL (27 testů Vitest), 26 Playwright testů pro mobil/desktop. Aktuální výsledky jsou v GitHub Actions a STATUS.md. CI spouští stejné kontroly při každém pushi. Nejde o nezávislý bezpečnostní audit.
 
 ## Mobil a provoz
 
 [PWA, iOS, Android a widgety — návod](MOBILE.md). Podepisovací klíče, Apple Developer účet a Android SDK nejsou součástí repozitáře.
 
-Pro úplnou zálohu včetně sessions, pozvánek a konfigurace použijte PostgreSQL `pg_dump` do šifrovaného úložiště a ověřte `pg_restore` do samostatné databáze. Uživatelská JSON obnova verze 2 přenáší účty s počátečními zůstatky, položky, transakce, interní převody a série do prázdného účtu; podporuje také původní zálohy verze 1. Nepřenáší kompletní vzhled položek, preferences, widgetové předvolby, sessions, bankovní souhlasy ani push odběry. Databázový administrátor technicky disponuje přístupem k databázi; aplikační OWNER takové API nemá.
+Pro úplnou zálohu včetně sessions, pozvánek a konfigurace použijte PostgreSQL `pg_dump` do šifrovaného úložiště a ověřte `pg_restore` do samostatné databáze. Uživatelská JSON obnova verze 3 přenáší účty s počátečními zůstatky, položky, transakce, interní převody, rozpočty a série do prázdného účtu; zachovává měny a obchodníky a podporuje také původní zálohy verze 1 a 2. Nepřenáší kompletní vzhled položek, preferences, widgetové předvolby, sessions, bankovní souhlasy ani push odběry. Databázový administrátor technicky disponuje přístupem k databázi; aplikační OWNER takové API nemá.
 
 [Licenční informace k ikonám](LICENSES.md). Nikdy necommitujte `.env`, privátní VAPID klíč nebo mobilní keystore.
 
@@ -92,3 +94,7 @@ V Nastavení → Widgety a rychlé akce lze připravit vlastní položky a čás
 ## Bankovní účty a Revolut
 
 Nastavení obsahuje připojení účtů přes Enable Banking, živý katalog dostupných bank podle země a typu účtu, bankovní zůstatky, pravidelnou synchronizaci, kontrolovaný import a párování transakcí. Provoz vyžaduje vlastní aktivovaný přístup poskytovatele; živé propojení nebylo při vývoji ověřeno. Rozsah bank, omezení měn, aktivace na Renderu a bezpečnost jsou v [BANKING.md](BANKING.md).
+
+## Rozpočty, design a obchodníci
+
+V **Nastavení → Rozpočty a limity** vyberte účet a zadejte rozpočet nebo limit jedné platby. Upozornění neblokují zápis reálné platby. **Vzhled a ovládací panel** poskytuje živý náhled; změny potvrďte tlačítkem Uložit vzhled. Obchodníka doplňte do formuláře platby. V **Přehledy** je samostatný filtr a záložka **Rozšířené analýzy**. Podrobnosti a pravidla výpočtů najdete v [REPORTS.md](REPORTS.md).

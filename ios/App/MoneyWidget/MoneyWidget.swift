@@ -9,7 +9,7 @@ struct WidgetActionEntity: AppEntity {
 }
 struct WidgetActionQuery: EntityQuery {
  func entities(for identifiers:[String]) async throws -> [WidgetActionEntity] {try await suggestedEntities().filter{identifiers.contains($0.id)}}
- func suggestedEntities() async throws -> [WidgetActionEntity] {try await WidgetStore.snapshot().actions.map{WidgetActionEntity(id:$0.id,name:$0.name+" · "+WidgetStore.money($0.amount))}}
+ func suggestedEntities() async throws -> [WidgetActionEntity] {try await WidgetStore.snapshot().actions.map{WidgetActionEntity(id:$0.id,name:$0.name+" · "+WidgetStore.money($0.amount,currency:$0.currency))}}
 }
 struct MoneyConfiguration: WidgetConfigurationIntent {
  static var title:LocalizedStringResource = "Nastavení financí"
@@ -47,7 +47,7 @@ struct MoneyView:View {
  var accessory:Bool {family == .accessoryCircular || family == .accessoryRectangular}
  var body:some View {VStack(alignment:.leading,spacing:9){if !accessory {HStack{Label("SYSTEMATIC MONEY",systemImage:"wallet.pass").font(.system(size:10,weight:.bold));Spacer();if let action=entry.action {Button(intent:RefreshMoneyIntent(actionId:action.id)){Image(systemName:"arrow.clockwise")}.buttonStyle(.plain).accessibilityLabel("Obnovit a připravit další platbu")}}}
  if entry.showBalance,let balance=entry.balance {Text(WidgetStore.money(balance)).font(accessory ? .caption : .title3).bold().privacySensitive()}
- if let action=entry.action {if action.mode=="DIRECT" {Button(intent:SavePaymentIntent(actionId:action.id,requestId:entry.nonce)){Label(action.name+" · "+WidgetStore.money(action.amount),systemImage:action.kind=="INCOME" ? "plus.circle.fill":"minus.circle.fill").font(.caption).lineLimit(2)}.buttonStyle(.bordered).tint(.mint)}else{Link(destination:URL(string:"systematicmoney://quick?action="+action.id)!){Label(accessory && family == .accessoryCircular ? "" : action.name,systemImage:action.kind=="INCOME" ? "plus.circle.fill":"minus.circle.fill").font(.caption)}}}else{Link(destination:URL(string:"systematicmoney://quick")!){Label("Otevřít aplikaci",systemImage:"wallet.pass")}}
+ if let action=entry.action {if action.mode=="DIRECT" {Button(intent:SavePaymentIntent(actionId:action.id,requestId:entry.nonce)){Label(action.name+" · "+WidgetStore.money(action.amount,currency:action.currency),systemImage:action.kind=="INCOME" ? "plus.circle.fill":"minus.circle.fill").font(.caption).lineLimit(2)}.buttonStyle(.bordered).tint(.mint)}else{Link(destination:URL(string:"systematicmoney://quick?action="+action.id)!){Label(accessory && family == .accessoryCircular ? "" : action.name,systemImage:action.kind=="INCOME" ? "plus.circle.fill":"minus.circle.fill").font(.caption)}}}else{Link(destination:URL(string:"systematicmoney://quick")!){Label("Otevřít aplikaci",systemImage:"wallet.pass")}}
  if !accessory{Text(entry.message).font(.system(size:9)).foregroundStyle(.secondary);Text(entry.date,style:.time).font(.system(size:9)).foregroundStyle(.secondary)}
  }.containerBackground(Color(red:0.02,green:0.21,blue:0.30),for:.widget).foregroundStyle(.mint)}
 }
@@ -140,13 +140,13 @@ struct PanelView: View {
                         VStack(spacing: 2) {
                             Image(systemName: income ? "plus.circle.fill" : "minus.circle.fill")
                             Text(action.name).lineLimit(1)
-                            Text(WidgetStore.money(action.amount)).lineLimit(1).minimumScaleFactor(0.6)
+                            Text(WidgetStore.money(action.amount,currency:action.currency)).lineLimit(1).minimumScaleFactor(0.6)
                         }.font(.system(size: family == .systemLarge ? 12 : 10))
                             .frame(maxWidth: .infinity, minHeight: family == .systemLarge ? 96 : 42)
                     }
                     .buttonStyle(.plain).tint(income ? .mint : .pink)
                     .foregroundStyle(income ? Color.mint : Color.pink)
-                    .accessibilityLabel("\(income ? "Příjem" : "Výdaj") \(action.name), \(WidgetStore.money(action.amount))")
+                    .accessibilityLabel("\(income ? "Příjem" : "Výdaj") \(action.name), \(WidgetStore.money(action.amount,currency:action.currency))")
                 } else {
                     Text(income ? "+" : "−").frame(maxWidth: .infinity, minHeight: 42).opacity(0.25)
                 }

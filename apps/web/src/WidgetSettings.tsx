@@ -1,3 +1,4 @@
+import { money } from "../../shared/finance";
 import { WalletSelect } from "./Wallets";
 import { WidgetPanelSettings } from "./WidgetPanelSettings";
 import { useEffect, useState } from "react";
@@ -111,8 +112,12 @@ export function WidgetSettings({
             </select>
           </label>
           <label>
-            Přednastavená částka
+            Přednastavená částka v měně účtu
             <input name="amount" required inputMode="decimal" />
+          </label>
+          <label>
+            Obchodník rychlé akce
+            <input name="merchant" maxLength={120} />
           </label>
           <label>
             Způsob uložení
@@ -123,7 +128,7 @@ export function WidgetSettings({
           </label>
           <label>
             <input type="checkbox" name="showBalance" />
-            Zobrazovat zůstatek u Android widgetu této akce
+            Zobrazovat součet korunových účtů u Android widgetu této akce
           </label>
           <button disabled={busy || !items.length}>
             <Plus size={16} />
@@ -136,8 +141,11 @@ export function WidgetSettings({
             <div>
               <strong>{a.name}</strong>
               <small>
-                {Number(a.amount) / 100} Kč ·{" "}
-                {a.mode === "DIRECT" ? "přímé uložení" : "formulář"}
+                {money(
+                  a.amount,
+                  wallets.find((w) => w.id === a.walletId)?.currency,
+                )}{" "}
+                · {a.mode === "DIRECT" ? "přímé uložení" : "formulář"}
               </small>
             </div>
             <button
@@ -153,7 +161,13 @@ export function WidgetSettings({
             </button>
           </div>
         ))}
-        <WidgetPanelSettings actions={actions} items={items} />
+        <WidgetPanelSettings
+          actions={actions.map((a) => ({
+            ...a,
+            currency: wallets.find((w) => w.id === a.walletId)?.currency,
+          }))}
+          items={items}
+        />
         <h3>Připojení telefonu</h3>
         {nativeWidgetSupport() ? (
           <>
